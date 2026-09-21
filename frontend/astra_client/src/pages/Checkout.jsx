@@ -1,0 +1,35 @@
+import {useEffect,useState} from 'react';
+import {useNavigate} from 'react-router-dom';
+import {useSelector,useDispatch} from 'react-redux';
+import {orderApi} from '../api/orderApi';
+import {setCart,clearCart} from '../store/cartSlice';
+import {integrationApi} from '../api/integrationApi';
+
+const empty={fullName:'',phone:'',line1:'',line2:'',city:'',state:'',postalCode:'',country:'India',defaultAddress:false};
+
+function loadRazorpay(){return new Promise((resolve,reject)=>{if(window.Razorpay)return resolve(true);const s=document.createElement('script');s.src='https://checkout.razorpay.com/v1/checkout.js';s.onload=()=>resolve(true);s.onerror=()=>reject(new Error('Could not load the payment gateway.'));document.body.appendChild(s);});}
+
+export default function Checkout(){
+ const user=useSelector(s=>s.auth.user),cart=useSelector(s=>s.cart),dispatch=useDispatch(),navigate=useNavigate();
+ const [addresses,setAddresses]=useState([]),[selected,setSelected]=useState(''),[form,setForm]=useState(empty),[adding,setAdding]=useState(false),[placing,setPlacing]=useState(false),[method,setMethod]=useState('COD'),[error,setError]=useState(''),[suggestions,setSuggestions]=useState([]);
+ useEffect(()=>{if(user){orderApi.cart().then(r=>dispatch(setCart(r.data)));orderApi.addresses().then(r=>{setAddresses(r.data);setSelected(String(r.data.find(a=>a.defaultAddress)?.id||r.data[0]?.id||''))})}},[user,dispatch]);
+ if(!user)return <main className="checkout-page"><div className="empty-card"><h1>Please sign in</h1><button className="primary-btn" onClick={()=>navigate('/')}>Back to store</button></div></main>;
+ const lookupAddress=async value=>{setForm(f=>({...f,line1:value})); if(value.trim().length<3){setSuggestions([]);return;} try{const r=await integrationApi.locationSearch(value);setSuggestions(r.data||[])}catch{setSuggestions([])}};
+ const selectSuggestion=s=>{setForm(f=>({...f,line1:s.displayName}));setSuggestions([])};
+ const saveAddress=async e=>{e.preventDefault();try{const r=await orderApi.addAddress(form);setAddresses(a=>[r.data,...a]);setSelected(String(r.data.id));setAdding(false);setForm(empty)}catch(e){setError(e.response?.data?.message||'Unable to save address.')}};
+ const placeCod=async()=>{const r=await orderApi.checkout({addressId:Number(selected),paymentMethod:'COD'});dispatch(clearCart());navigate(`/orders/${r.data.orderNumber}`,{state:{success:true}})};
+ const placeOnline=async()=>{
+   await loadRazorpay();
+   const init=await orderApi.onlineCheckout({addressId:Number(selected),paymentMethod:'RAZORPAY'});
+   await new Promise((resolve,reject)=>{
+     const razorpay=new window.Razorpay({key:init.data.keyId,amount:Math.round(Number(init.data.amount)*100),currency:init.data.currency,order_id:init.data.gatewayOrderId,name:'ASTRA',description:`ASTRA order ${init.data.orderNumber}`,theme:{color:'#111827'},handler:async response=>{try{await orderApi.verifyPayment({razorpayOrderId:response.razorpay_order_id,razorpayPaymentId:response.razorpay_payment_id,razorpaySignature:response.razorpay_signature});dispatch(clearCart());navigate(`/orders/${init.data.orderNumber}`,{state:{success:true}});resolve();}catch(e){reject(new Error(e.response?.data?.message||'Payment verification failed.'))}},modal:{ondismiss:()=>reject(new Error('Payment window closed. Your order remains pending; you can cancel it from Orders.'))}});
+     razorpay.on('payment.failed',r=>reject(new Error(r.error?.description||'Payment failed.'))); razorpay.open();
+   });
+ };
+ const place=async()=>{setError('');if(!selected)return setError('Select a delivery address.');if(!cart.items.length)return navigate('/cart');try{setPlacing(true);if(method==='COD')await placeCod();else await placeOnline();}catch(e){setError(e.response?.data?.message||e.message||'Unable to place order.')}finally{setPlacing(false)}};
+ return <main className="checkout-page"><div className="page-title"><div><p className="eyebrow">ASTRA CHECKOUT</p><h1>Secure Checkout</h1></div><span className="secure-label">🔒 Secure payment</span></div><div className="checkout-layout"><section>
+   <div className="checkout-card"><div className="section-title"><h2>1. Delivery address</h2><button className="back-link" onClick={()=>setAdding(!adding)}>+ Add address</button></div>{adding&&<form className="address-form" onSubmit={saveAddress}>{['fullName','phone','line2','city','state','postalCode'].map(k=><input key={k} required={k!=='line2'} placeholder={k.replace(/([A-Z])/g,' $1')} value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})}/>)}<div className="address-lookup"><input required placeholder="Address / locality" value={form.line1} onChange={e=>lookupAddress(e.target.value)}/>{suggestions.length>0&&<div className="address-suggestions">{suggestions.map((s,i)=><button type="button" key={i} onClick={()=>selectSuggestion(s)}>{s.displayName}</button>)}</div>}</div><div className="form-actions"><button type="submit" className="primary-btn">Save address</button><button type="button" className="secondary-btn" onClick={()=>setAdding(false)}>Cancel</button></div></form>}{addresses.length===0&&!adding&&<p>No saved addresses. Add one to continue.</p>}{addresses.map(a=><label className={`address-option ${selected===String(a.id)?'selected':''}`} key={a.id}><input type="radio" name="address" checked={selected===String(a.id)} onChange={()=>setSelected(String(a.id))}/><span><strong>{a.fullName} · {a.phone}</strong><br/>{a.line1}{a.line2&&`, ${a.line2}`}<br/>{a.city}, {a.state} {a.postalCode}, {a.country}</span></label>)}</div>
+   <div className="checkout-card"><h2>2. Payment method</h2><label className={`payment-option ${method==='COD'?'selected':''}`}><input type="radio" name="payment" checked={method==='COD'} onChange={()=>setMethod('COD')}/><span><strong>Cash on Delivery</strong><small>Pay when your ASTRA order arrives.</small></span></label><label className={`payment-option ${method==='RAZORPAY'?'selected':''}`}><input type="radio" name="payment" checked={method==='RAZORPAY'} onChange={()=>setMethod('RAZORPAY')}/><span><strong>Card / UPI / Net Banking</strong><small>Secure checkout powered by Razorpay.</small></span></label></div>
+   {error&&<div className="error-banner">{error}</div>}
+ </section><aside className="summary-card"><h2>Review order</h2>{cart.items.map(i=><div className="mini-line" key={i.productId}><span>{i.name} × {i.quantity}</span><strong>₹{i.lineTotal.toFixed(2)}</strong></div>)}<hr/><div><span>Subtotal</span><strong>₹{cart.subtotal.toFixed(2)}</strong></div><div><span>Shipping</span><strong>{cart.shippingFee===0?'FREE':`₹${cart.shippingFee.toFixed(2)}`}</strong></div><div className="summary-total"><span>Total</span><strong>₹{cart.total.toFixed(2)}</strong></div><button disabled={placing||!selected||!cart.items.length} className="primary-btn full" onClick={place}>{placing?(method==='RAZORPAY'?'Opening secure payment…':'Placing order…'):(method==='RAZORPAY'?'Pay securely':'Place order')}</button><p className="checkout-note">You will be redirected to the secure payment window for online payments.</p></aside></div></main>;
+}

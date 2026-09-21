@@ -1,0 +1,38 @@
+package com.astra.enums;
+
+public enum NotificationType {
+
+    WELCOME,
+
+    EMAIL_VERIFICATION,
+
+    PASSWORD_RESET,
+
+    LOGIN,
+
+    ORDER_CREATED,
+
+    ORDER_CONFIRMED,
+
+    ORDER_CANCELLED,
+
+    PAYMENT_SUCCESS,
+
+    PAYMENT_FAILED,
+
+    PAYMENT_REFUNDED,
+
+    SHIPMENT_CREATED,
+
+    SHIPMENT_PICKED_UP,
+
+    SHIPMENT_IN_TRANSIT,
+
+    OUT_FOR_DELIVERY,
+
+    ORDER_DELIVERED,
+
+    DELIVERY_FAILED,
+
+    RETURN_CREATED
+}
