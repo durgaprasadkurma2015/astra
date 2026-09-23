@@ -1,55 +1,52 @@
-import { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
-import { orderApi } from '../api/orderApi';
-import { setCart } from '../store/cartSlice';
-import { useParams } from 'react-router-dom';
-import { ShoppingCart, Heart, Truck, ShieldCheck, ArrowLeft } from 'lucide-react';
-import { catalogApi } from '../api/catalogApi';
-import Rating from '../components/common/Rating';
-import ReviewsSection from '../components/reviews/ReviewsSection';
-import RecommendationStrip from '../components/product/RecommendationStrip';
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import { Alert, Button, Container, Grid, Rating, Stack, Typography, TextField, Divider } from "@mui/material";
+import { productApi, reviewApi, recommendationApi } from "../api/api";
+import { useCart } from "../context/CartContext";
+import ProductCard from "../components/ProductCard";
 
 export default function ProductDetails() {
-  const { slug } = useParams();
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const user = useSelector((state) => state.auth.user);
+  const { id } = useParams();
+  const { addToCart } = useCart();
   const [product, setProduct] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [similar, setSimilar] = useState([]);
   const [qty, setQty] = useState(1);
+  const [message, setMessage] = useState("");
 
-  useEffect(() => { catalogApi.product(slug).then(r => setProduct(r.data)); }, [slug]);
+  useEffect(() => {
+    Promise.allSettled([productApi.get(id), reviewApi.list(id), recommendationApi.similar(id)])
+      .then(([p,r,s]) => {
+        if (p.status === "fulfilled") setProduct(p.value.data);
+        if (r.status === "fulfilled") setReviews(r.value.data?.content || r.value.data || []);
+        if (s.status === "fulfilled") setSimilar(s.value.data || []);
+      });
+  }, [id]);
 
-  if (!product) return <main className="catalog-empty">Loading product…</main>;
+  if (!product) return <Container sx={{ py: 5 }}>Loading...</Container>;
+  const image = product.thumbnailUrl || product.images?.[0]?.imageUrl;
 
-  const discount = product.mrp ? Math.round((1 - Number(product.price) / Number(product.mrp)) * 100) : 0;
-
-  return (
-    <main className="product-details">
-      <button className="back-link" onClick={() => navigate(-1)}><ArrowLeft size={16}/> Back</button>
-      <div className="detail-layout">
-        <div className="detail-image"><img src={product.imageUrl} alt={product.name}/></div>
-        <div className="detail-info">
-          <span className="product-category">{product.categoryName}</span>
-          <h1>{product.name}</h1>
-          <div className="detail-rating"><Rating value={product.rating}/> <span>{product.reviewCount.toLocaleString()} ratings</span></div>
-          <hr/>
-          <p className="detail-description">{product.description}</p>
-          <div className="detail-price">${product.price} {product.mrp && <del>${product.mrp}</del>} {discount > 0 && <b>{discount}% off</b>}</div>
-          <p className={product.stock > 0 ? 'stock-ok' : 'stock-out'}>{product.stock > 0 ? `${product.stock} units available` : 'Currently unavailable'}</p>
-          <div className="qty"><label>Quantity</label><select value={qty} onChange={e => setQty(Number(e.target.value))}>{[1,2,3,4,5].map(n => <option key={n}>{n}</option>)}</select></div>
-          <div className="detail-actions">
-            <button className="primary-btn" onClick={()=>{if(!user){navigate("/");return;} orderApi.addToCart(product.id,qty).then(r=>dispatch(setCart(r.data)));}}><ShoppingCart size={18}/> Add to Cart</button>
-            <button className="secondary-btn" onClick={()=>{if(!user){navigate("/");return;} orderApi.toggleWishlist(product.id).then(()=>{});}}><Heart size={18}/> Wishlist</button>
-          </div>
-          <div className="trust-row">
-            <span><Truck size={18}/> Fast delivery</span>
-            <span><ShieldCheck size={18}/> Secure checkout</span>
-          </div>
-        </div>
-      </div>
-    <RecommendationStrip slug={slug}/>
-      <ReviewsSection slug={slug} productName={product.name}/>
-    </main>
-  );
+  return <Container maxWidth="xl" sx={{ py: 5 }}>
+    {message && <Alert sx={{ mb: 2 }}>{message}</Alert>}
+    <Grid container spacing={5}>
+      <Grid size={{ xs: 12, md: 6 }}><img src={image} alt={product.name} style={{ width:"100%", maxHeight:520, objectFit:"contain", background:"#fff", borderRadius:12 }} /></Grid>
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="h3">{product.name}</Typography>
+        <Stack direction="row" gap={1} alignItems="center" my={2}><Rating value={product.rating || 0} readOnly precision={0.5}/><span>{product.reviewCount || 0} reviews</span></Stack>
+        <Typography variant="h4">₹{Number(product.discountPrice ?? product.price).toLocaleString("en-IN")}</Typography>
+        <Typography color="text.secondary" sx={{ mt: 2 }}>{product.description || product.shortDescription}</Typography>
+        <Stack direction="row" gap={2} sx={{ mt: 4 }}>
+          <TextField label="Quantity" type="number" value={qty} onChange={e => setQty(Math.max(1, Number(e.target.value)))} sx={{ width:120 }} />
+          <Button variant="contained" size="large" disabled={!product.stockQuantity}
+            onClick={async()=>{ await addToCart(product.id, qty); setMessage("Added to cart"); }}>Add to cart</Button>
+        </Stack>
+      </Grid>
+    </Grid>
+    <Divider sx={{ my: 5 }} />
+    <Typography variant="h4" mb={2}>Reviews</Typography>
+    <Stack gap={2}>{reviews.map(r => <div key={r.id}><Rating value={r.rating} readOnly/><Typography variant="subtitle1">{r.title}</Typography><Typography>{r.comment}</Typography></div>)}</Stack>
+    <Divider sx={{ my: 5 }} />
+    <Typography variant="h4" mb={2}>Similar products</Typography>
+    <Grid container spacing={3}>{similar.map(p => <Grid key={p.id} size={{xs:12,sm:6,md:3}}><ProductCard product={p}/></Grid>)}</Grid>
+  </Container>;
 }

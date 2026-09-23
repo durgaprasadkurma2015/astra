@@ -1,3 +1,5 @@
+-- V16__seller.sql
+
 CREATE TABLE sellers (
     id BIGINT NOT NULL AUTO_INCREMENT,
 
@@ -29,7 +31,11 @@ CREATE TABLE sellers (
     CONSTRAINT fk_seller_user
         FOREIGN KEY (user_id)
         REFERENCES users(id)
+        ON DELETE CASCADE
 );
 
 CREATE INDEX idx_seller_status
     ON sellers(status);
+
+CREATE INDEX idx_seller_user
+    ON sellers(user_id);

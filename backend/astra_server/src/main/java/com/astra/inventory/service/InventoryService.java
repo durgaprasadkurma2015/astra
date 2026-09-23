@@ -2,12 +2,12 @@ package com.astra.inventory.service;
 
 import com.astra.dto.InventoryMovementResponse;
 import com.astra.entity.InventoryMovement;
-import com.astra.enums.InventoryMovementType;
-import com.astra.inventory.dto.InventoryAdjustmentRequest;
-import com.astra.inventory.dto.InventoryResponse;
 import com.astra.entity.Order;
 import com.astra.entity.Product;
 import com.astra.entity.ProductInventory;
+import com.astra.enums.InventoryMovementType;
+import com.astra.inventory.dto.InventoryAdjustmentRequest;
+import com.astra.inventory.dto.InventoryResponse;
 import com.astra.repository.InventoryMovementRepository;
 import com.astra.repository.ProductInventoryRepository;
 import com.astra.repository.ProductRepository;
@@ -19,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 @Service
+@Transactional
 public class InventoryService {
 
     private final ProductInventoryRepository inventoryRepository;
@@ -28,15 +29,23 @@ public class InventoryService {
     public InventoryService(
             ProductInventoryRepository inventoryRepository,
             InventoryMovementRepository movementRepository,
-            ProductRepository productRepository) {
+            ProductRepository productRepository
+    ) {
 
         this.inventoryRepository = inventoryRepository;
         this.movementRepository = movementRepository;
         this.productRepository = productRepository;
     }
 
-    @Transactional
-    public InventoryResponse getInventory(Long productId) {
+    /**
+     * Get inventory for a product.
+     *
+     * If inventory does not exist yet, it is created
+     * using the current Product.stockQuantity.
+     */
+    public InventoryResponse getInventory(
+            Long productId
+    ) {
 
         ProductInventory inventory =
                 getOrCreateInventory(productId);
@@ -44,18 +53,28 @@ public class InventoryService {
         return toResponse(inventory);
     }
 
-    @Transactional
+    /**
+     * Reserve available inventory for an order.
+     *
+     * available -> reserved
+     */
     public InventoryResponse reserve(
             Long productId,
             int quantity,
-            Order order) {
+            Order order
+    ) {
 
         validateQuantity(quantity);
 
         ProductInventory inventory =
                 getLockedInventory(productId);
 
-        if (inventory.getAvailableQuantity() < quantity) {
+        int available =
+                safeInt(
+                        inventory.getAvailableQuantity()
+                );
+
+        if (available < quantity) {
 
             throw new IllegalStateException(
                     "Insufficient inventory for product: "
@@ -63,14 +82,19 @@ public class InventoryService {
             );
         }
 
-        int before = inventory.getAvailableQuantity();
+        int beforeAvailable = available;
+
+        int beforeReserved =
+                safeInt(
+                        inventory.getReservedQuantity()
+                );
 
         inventory.setAvailableQuantity(
-                before - quantity
+                available - quantity
         );
 
         inventory.setReservedQuantity(
-                inventory.getReservedQuantity() + quantity
+                beforeReserved + quantity
         );
 
         inventoryRepository.save(inventory);
@@ -82,7 +106,7 @@ public class InventoryService {
                 order,
                 InventoryMovementType.RESERVE,
                 quantity,
-                before,
+                beforeAvailable,
                 inventory.getAvailableQuantity(),
                 "Stock reserved for order"
         );
@@ -90,33 +114,48 @@ public class InventoryService {
         return toResponse(inventory);
     }
 
-    @Transactional
+    /**
+     * Release reserved inventory.
+     *
+     * reserved -> available
+     *
+     * Used when an order is cancelled before consumption.
+     */
     public InventoryResponse release(
             Long productId,
             int quantity,
             Order order,
-            String reason) {
+            String reason
+    ) {
 
         validateQuantity(quantity);
 
         ProductInventory inventory =
                 getLockedInventory(productId);
 
-        if (inventory.getReservedQuantity() < quantity) {
+        int reserved =
+                safeInt(
+                        inventory.getReservedQuantity()
+                );
+
+        if (reserved < quantity) {
 
             throw new IllegalStateException(
                     "Reserved inventory is lower than release quantity"
             );
         }
 
-        int before = inventory.getAvailableQuantity();
+        int beforeAvailable =
+                safeInt(
+                        inventory.getAvailableQuantity()
+                );
 
         inventory.setReservedQuantity(
-                inventory.getReservedQuantity() - quantity
+                reserved - quantity
         );
 
         inventory.setAvailableQuantity(
-                before + quantity
+                beforeAvailable + quantity
         );
 
         inventoryRepository.save(inventory);
@@ -128,44 +167,75 @@ public class InventoryService {
                 order,
                 InventoryMovementType.RELEASE,
                 quantity,
-                before,
+                beforeAvailable,
                 inventory.getAvailableQuantity(),
-                reason
+                reason != null && !reason.isBlank()
+                        ? reason
+                        : "Reserved stock released"
         );
 
         return toResponse(inventory);
     }
 
-    @Transactional
+    /**
+     * Consume reserved inventory.
+     *
+     * reserved -> consumed
+     *
+     * Available quantity does not change because
+     * the stock was already removed from available
+     * quantity during reservation.
+     */
     public InventoryResponse consume(
             Long productId,
             int quantity,
-            Order order) {
+            Order order
+    ) {
 
         validateQuantity(quantity);
 
         ProductInventory inventory =
                 getLockedInventory(productId);
 
-        if (inventory.getReservedQuantity() < quantity) {
+        int reserved =
+                safeInt(
+                        inventory.getReservedQuantity()
+                );
+
+        if (reserved < quantity) {
 
             throw new IllegalStateException(
                     "Reserved inventory is lower than consume quantity"
             );
         }
 
-        int before = inventory.getAvailableQuantity();
+        int beforeAvailable =
+                safeInt(
+                        inventory.getAvailableQuantity()
+                );
+
+        int beforeReserved = reserved;
 
         inventory.setReservedQuantity(
-                inventory.getReservedQuantity() - quantity
+                reserved - quantity
         );
 
         inventoryRepository.save(inventory);
 
-        Product product = inventory.getProduct();
+        /*
+         * Sales count increases only when the reserved
+         * inventory is actually consumed.
+         */
+        Product product =
+                inventory.getProduct();
+
+        long currentSales =
+                safeLong(
+                        product.getSalesCount()
+                );
 
         product.setSalesCount(
-                product.getSalesCount() + quantity
+                currentSales + quantity
         );
 
         productRepository.save(product);
@@ -175,26 +245,34 @@ public class InventoryService {
                 order,
                 InventoryMovementType.CONSUME,
                 quantity,
-                before,
+                beforeAvailable,
                 inventory.getAvailableQuantity(),
-                "Reserved stock consumed after payment"
+                "Reserved stock consumed after successful payment"
         );
 
         return toResponse(inventory);
     }
 
-    @Transactional
+    /**
+     * Restock inventory.
+     *
+     * Adds quantity to available stock.
+     */
     public InventoryResponse restock(
             Long productId,
             int quantity,
-            String reason) {
+            String reason
+    ) {
 
         validateQuantity(quantity);
 
         ProductInventory inventory =
                 getLockedInventory(productId);
 
-        int before = inventory.getAvailableQuantity();
+        int before =
+                safeInt(
+                        inventory.getAvailableQuantity()
+                );
 
         inventory.setAvailableQuantity(
                 before + quantity
@@ -211,55 +289,82 @@ public class InventoryService {
                 quantity,
                 before,
                 inventory.getAvailableQuantity(),
-                reason
+                reason != null && !reason.isBlank()
+                        ? reason
+                        : "Inventory restocked"
         );
 
         return toResponse(inventory);
     }
 
-    @Transactional
+    /**
+     * Set available inventory to an exact quantity.
+     *
+     * Reserved inventory is not changed.
+     */
     public InventoryResponse adjust(
             Long productId,
-            InventoryAdjustmentRequest request) {
+            InventoryAdjustmentRequest request
+    ) {
 
         ProductInventory inventory =
                 getLockedInventory(productId);
 
-        int before = inventory.getAvailableQuantity();
-
-        int newQuantity = request.quantity();
+        int newQuantity =
+                request.quantity();
 
         if (newQuantity < 0) {
+
             throw new IllegalArgumentException(
                     "Inventory quantity cannot be negative"
             );
         }
 
-        inventory.setAvailableQuantity(newQuantity);
+        int before =
+                safeInt(
+                        inventory.getAvailableQuantity()
+                );
+
+        inventory.setAvailableQuantity(
+                newQuantity
+        );
 
         inventoryRepository.save(inventory);
 
         syncProductStock(inventory);
 
         int difference =
-                Math.abs(newQuantity - before);
+                Math.abs(
+                        newQuantity - before
+                );
 
-        createMovement(
-                inventory.getProduct(),
-                null,
-                InventoryMovementType.ADJUSTMENT,
-                difference,
-                before,
-                newQuantity,
-                request.reason()
-        );
+        /*
+         * Do not create a zero-quantity movement.
+         */
+        if (difference > 0) {
+
+            createMovement(
+                    inventory.getProduct(),
+                    null,
+                    InventoryMovementType.ADJUSTMENT,
+                    difference,
+                    before,
+                    newQuantity,
+                    request.reason()
+            );
+        }
 
         return toResponse(inventory);
     }
 
+    /**
+     * Get inventory movements for a product.
+     */
+    @Transactional
     public Page<InventoryMovementResponse> getProductMovements(
             Long productId,
-            Pageable pageable) {
+            Pageable pageable
+    ) {
 
         return movementRepository
                 .findByProductIdOrderByCreatedAtDesc(
@@ -269,9 +374,14 @@ public class InventoryService {
                 .map(this::toMovementResponse);
     }
 
+    /**
+     * Get inventory movements for an order.
+     */
+    @Transactional
     public Page<InventoryMovementResponse> getOrderMovements(
             Long orderId,
-            Pageable pageable) {
+            Pageable pageable
+    ) {
 
         return movementRepository
                 .findByOrderIdOrderByCreatedAtDesc(
@@ -281,8 +391,15 @@ public class InventoryService {
                 .map(this::toMovementResponse);
     }
 
+    /**
+     * Find inventory with a database lock.
+     *
+     * This protects against two simultaneous orders
+     * reserving the same stock.
+     */
     private ProductInventory getLockedInventory(
-            Long productId) {
+            Long productId
+    ) {
 
         return inventoryRepository
                 .findWithLockByProductId(productId)
@@ -291,8 +408,12 @@ public class InventoryService {
                 );
     }
 
+    /**
+     * Get existing inventory or create it.
+     */
     private ProductInventory getOrCreateInventory(
-            Long productId) {
+            Long productId
+    ) {
 
         return inventoryRepository
                 .findByProductId(productId)
@@ -301,8 +422,13 @@ public class InventoryService {
                 );
     }
 
+    /**
+     * Create inventory using the Product's current
+     * stock quantity.
+     */
     private ProductInventory createInventory(
-            Long productId) {
+            Long productId
+    ) {
 
         Product product =
                 productRepository.findById(productId)
@@ -319,7 +445,9 @@ public class InventoryService {
         inventory.setProduct(product);
 
         inventory.setAvailableQuantity(
-                product.getStockQuantity()
+                safeInt(
+                        product.getStockQuantity()
+                )
         );
 
         inventory.setReservedQuantity(0);
@@ -327,18 +455,29 @@ public class InventoryService {
         return inventoryRepository.save(inventory);
     }
 
+    /**
+     * Keep Product.stockQuantity synchronized with
+     * available inventory.
+     */
     private void syncProductStock(
-            ProductInventory inventory) {
+            ProductInventory inventory
+    ) {
 
-        Product product = inventory.getProduct();
+        Product product =
+                inventory.getProduct();
 
         product.setStockQuantity(
-                inventory.getAvailableQuantity()
+                safeInt(
+                        inventory.getAvailableQuantity()
+                )
         );
 
         productRepository.save(product);
     }
 
+    /**
+     * Create inventory movement record.
+     */
     private void createMovement(
             Product product,
             Order order,
@@ -346,7 +485,8 @@ public class InventoryService {
             int quantity,
             int before,
             int after,
-            String reason) {
+            String reason
+    ) {
 
         InventoryMovement movement =
                 new InventoryMovement();
@@ -362,33 +502,56 @@ public class InventoryService {
         movementRepository.save(movement);
     }
 
-    private void validateQuantity(int quantity) {
+    /**
+     * Validate inventory quantity.
+     */
+    private void validateQuantity(
+            int quantity
+    ) {
 
         if (quantity <= 0) {
+
             throw new IllegalArgumentException(
                     "Quantity must be greater than zero"
             );
         }
     }
 
+    /**
+     * Convert inventory entity to API response.
+     */
     private InventoryResponse toResponse(
-            ProductInventory inventory) {
+            ProductInventory inventory
+    ) {
+
+        int available =
+                safeInt(
+                        inventory.getAvailableQuantity()
+                );
+
+        int reserved =
+                safeInt(
+                        inventory.getReservedQuantity()
+                );
 
         int total =
-                inventory.getAvailableQuantity()
-                        + inventory.getReservedQuantity();
+                available + reserved;
 
         return new InventoryResponse(
                 inventory.getProduct().getId(),
                 inventory.getProduct().getName(),
-                inventory.getAvailableQuantity(),
-                inventory.getReservedQuantity(),
+                available,
+                reserved,
                 total
         );
     }
 
+    /**
+     * Convert movement entity to API response.
+     */
     private InventoryMovementResponse toMovementResponse(
-            InventoryMovement movement) {
+            InventoryMovement movement
+    ) {
 
         return new InventoryMovementResponse(
                 movement.getId(),
@@ -403,5 +566,19 @@ public class InventoryService {
                 movement.getReason(),
                 movement.getCreatedAt()
         );
+    }
+
+    private int safeInt(
+            Integer value
+    ) {
+
+        return value == null ? 0 : value;
+    }
+
+    private long safeLong(
+            Long value
+    ) {
+
+        return value == null ? 0L : value;
     }
 }

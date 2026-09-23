@@ -1,5 +1,8 @@
 package com.astra.enums;
 
-public class UserRole {
+public enum UserRole {
 
+    CUSTOMER,
+    SELLER,
+    ADMIN
 }

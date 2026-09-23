@@ -1,5 +1,9 @@
 package com.astra.enums;
 
-public class UserStatus {
+public enum UserStatus {
 
+    ACTIVE,
+    DISABLED,
+    SUSPENDED,
+    DELETED
 }

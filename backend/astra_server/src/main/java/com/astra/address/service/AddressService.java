@@ -10,10 +10,12 @@ import com.astra.user.service.UserService;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@Transactional
 public class AddressService {
 
     private final AddressRepository addressRepository;
@@ -21,12 +23,13 @@ public class AddressService {
 
     public AddressService(
             AddressRepository addressRepository,
-            UserService userService) {
-
+            UserService userService
+    ) {
         this.addressRepository = addressRepository;
         this.userService = userService;
     }
 
+    @Transactional(readOnly = true)
     public List<AddressResponse> getAddresses(Long userId) {
 
         User user = userService.getUser(userId);
@@ -40,7 +43,8 @@ public class AddressService {
 
     public AddressResponse create(
             Long userId,
-            AddressRequest request) {
+            AddressRequest request
+    ) {
 
         User user = userService.getUser(userId);
 
@@ -50,24 +54,27 @@ public class AddressService {
 
         Address address = Address.builder()
                 .user(user)
-                .fullName(request.fullName())
-                .phone(request.phone())
-                .addressLine1(request.addressLine1())
-                .addressLine2(request.addressLine2())
-                .city(request.city())
-                .state(request.state())
-                .postalCode(request.postalCode())
-                .country(request.country())
+                .fullName(request.fullName().trim())
+                .phone(request.phone().trim())
+                .addressLine1(request.addressLine1().trim())
+                .addressLine2(normalizeOptional(request.addressLine2()))
+                .city(request.city().trim())
+                .state(request.state().trim())
+                .postalCode(request.postalCode().trim())
+                .country(request.country().trim())
                 .defaultAddress(request.defaultAddress())
                 .build();
 
-        return toResponse(addressRepository.save(address));
+        return toResponse(
+                addressRepository.save(address)
+        );
     }
 
     public AddressResponse update(
             Long userId,
             Long addressId,
-            AddressRequest request) {
+            AddressRequest request
+    ) {
 
         User user = userService.getUser(userId);
 
@@ -84,22 +91,27 @@ public class AddressService {
             clearDefaultAddress(user);
         }
 
-        address.setFullName(request.fullName());
-        address.setPhone(request.phone());
-        address.setAddressLine1(request.addressLine1());
-        address.setAddressLine2(request.addressLine2());
-        address.setCity(request.city());
-        address.setState(request.state());
-        address.setPostalCode(request.postalCode());
-        address.setCountry(request.country());
+        address.setFullName(request.fullName().trim());
+        address.setPhone(request.phone().trim());
+        address.setAddressLine1(request.addressLine1().trim());
+        address.setAddressLine2(
+                normalizeOptional(request.addressLine2())
+        );
+        address.setCity(request.city().trim());
+        address.setState(request.state().trim());
+        address.setPostalCode(request.postalCode().trim());
+        address.setCountry(request.country().trim());
         address.setDefaultAddress(request.defaultAddress());
 
-        return toResponse(addressRepository.save(address));
+        return toResponse(
+                addressRepository.save(address)
+        );
     }
 
     public void delete(
             Long userId,
-            Long addressId) {
+            Long addressId
+    ) {
 
         User user = userService.getUser(userId);
 
@@ -117,7 +129,8 @@ public class AddressService {
 
     public AddressResponse makeDefault(
             Long userId,
-            Long addressId) {
+            Long addressId
+    ) {
 
         User user = userService.getUser(userId);
 
@@ -134,20 +147,37 @@ public class AddressService {
 
         address.setDefaultAddress(true);
 
-        return toResponse(addressRepository.save(address));
+        return toResponse(
+                addressRepository.save(address)
+        );
     }
 
     private void clearDefaultAddress(User user) {
 
         List<Address> addresses =
                 addressRepository
-                        .findByUserOrderByDefaultAddressDescCreatedAtDesc(user);
+                        .findByUserOrderByDefaultAddressDescCreatedAtDesc(
+                                user
+                        );
 
         addresses.forEach(address ->
                 address.setDefaultAddress(false)
         );
 
         addressRepository.saveAll(addresses);
+    }
+
+    private String normalizeOptional(String value) {
+
+        if (value == null) {
+            return null;
+        }
+
+        String trimmed = value.trim();
+
+        return trimmed.isBlank()
+                ? null
+                : trimmed;
     }
 
     private AddressResponse toResponse(Address address) {

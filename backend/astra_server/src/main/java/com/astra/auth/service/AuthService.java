@@ -6,22 +6,28 @@ import com.astra.auth.dto.LoginRequest;
 import com.astra.auth.dto.RegisterRequest;
 import com.astra.auth.dto.ResetPasswordRequest;
 import com.astra.auth.dto.VerifyOtpRequest;
+
 import com.astra.dto.AuthResponse;
 import com.astra.dto.MessageResponse;
+
 import com.astra.entity.Role;
 import com.astra.entity.User;
+
 import com.astra.exception.ApiException;
+
 import com.astra.repository.UserRepository;
-import com.astra.service.OtpService;
-import com.astra.service.PasswordResetService;
-import com.astra.service.TokenService;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+
 import org.springframework.security.crypto.password.PasswordEncoder;
+
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import org.springframework.web.client.RestClient;
 
 import java.net.URLEncoder;
@@ -56,6 +62,7 @@ public class AuthService {
         this.tokenService = tokenService;
         this.passwordResetService = passwordResetService;
         this.googleClientId = googleClientId;
+
         this.restClient = RestClient.builder().build();
     }
 
@@ -148,7 +155,8 @@ public class AuthService {
     // VERIFY EMAIL OTP
     // =========================================================
 
-    public AuthResponse verifyEmailOtp(VerifyOtpRequest request) {
+    public AuthResponse verifyEmailOtp(
+            VerifyOtpRequest request) {
 
         String email = normalizeEmail(request.email());
 
@@ -203,16 +211,24 @@ public class AuthService {
     // VERIFY SMS OTP
     // =========================================================
 
+    @Transactional
     public AuthResponse verifySmsOtp(
             String phone,
             String otp) {
 
         String normalized = normalizePhone(phone);
 
+        if (normalized == null) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "Phone number is required."
+            );
+        }
+
         User user = users.findByPhone(normalized)
                 .orElseThrow(() -> new ApiException(
                         HttpStatus.NOT_FOUND,
-                        "User not found."
+                        "No Astra account is registered with this phone number."
                 ));
 
         otpService.verifyPhone(
@@ -231,15 +247,30 @@ public class AuthService {
     // REFRESH TOKEN
     // =========================================================
 
+    @Transactional
     public AuthResponse refresh(String rawRefreshToken) {
 
-        User user = tokenService.validateRefreshToken(
-                rawRefreshToken
-        );
+        if (rawRefreshToken == null
+                || rawRefreshToken.isBlank()) {
 
-        tokenService.revoke(
-                rawRefreshToken
-        );
+            throw new ApiException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Refresh token is required."
+            );
+        }
+
+        User user =
+                tokenService.validateRefreshToken(
+                        rawRefreshToken
+                );
+
+        /*
+         * Rotate the refresh token.
+         *
+         * Old token becomes invalid.
+         * session() creates a new refresh token.
+         */
+        tokenService.revoke(rawRefreshToken);
 
         return session(user);
     }
@@ -248,11 +279,15 @@ public class AuthService {
     // LOGOUT
     // =========================================================
 
-    public MessageResponse logout(String rawRefreshToken) {
+    @Transactional
+    public MessageResponse logout(
+            String rawRefreshToken) {
 
-        tokenService.revoke(
-                rawRefreshToken
-        );
+        if (rawRefreshToken != null
+                && !rawRefreshToken.isBlank()) {
+
+            tokenService.revoke(rawRefreshToken);
+        }
 
         return new MessageResponse(
                 "Logged out successfully."
@@ -312,10 +347,11 @@ public class AuthService {
 
         try {
 
-            String encodedToken = URLEncoder.encode(
-                    request.idToken(),
-                    StandardCharsets.UTF_8
-            );
+            String encodedToken =
+                    URLEncoder.encode(
+                            request.idToken(),
+                            StandardCharsets.UTF_8
+                    );
 
             claims = restClient.get()
                     .uri(
@@ -341,35 +377,35 @@ public class AuthService {
             );
         }
 
-        String audience = String.valueOf(
-                claims.get("aud")
-        );
+        String audience =
+                String.valueOf(claims.get("aud"));
 
-        String issuer = String.valueOf(
-                claims.get("iss")
-        );
+        String issuer =
+                String.valueOf(claims.get("iss"));
 
-        String subject = String.valueOf(
-                claims.get("sub")
-        );
+        String subject =
+                String.valueOf(claims.get("sub"));
 
-        String email = String.valueOf(
-                claims.get("email")
-        );
+        String email =
+                String.valueOf(claims.get("email"));
 
-        Object nameValue = claims.get("name");
+        Object nameValue =
+                claims.get("name");
 
-        String name = nameValue != null
-                ? String.valueOf(nameValue)
-                : "Astra User";
+        String name =
+                nameValue != null
+                        ? String.valueOf(nameValue)
+                        : "Astra User";
 
-        String emailVerified = String.valueOf(
-                claims.get("email_verified")
-        );
+        String emailVerified =
+                String.valueOf(
+                        claims.get("email_verified")
+                );
 
         boolean validIssuer =
                 "accounts.google.com".equals(issuer)
-                        || "https://accounts.google.com".equals(issuer);
+                        || "https://accounts.google.com"
+                        .equals(issuer);
 
         if (!googleClientId.equals(audience)
                 || !validIssuer
@@ -383,12 +419,13 @@ public class AuthService {
             );
         }
 
-        User user = users.findByGoogleSubject(subject)
-                .orElseGet(() ->
-                        users.findByEmailIgnoreCase(
-                                normalizeEmail(email)
-                        ).orElse(null)
-                );
+        User user =
+                users.findByGoogleSubject(subject)
+                        .orElseGet(() ->
+                                users.findByEmailIgnoreCase(
+                                        normalizeEmail(email)
+                                ).orElse(null)
+                        );
 
         if (user == null) {
 

@@ -56,6 +56,16 @@ public interface ProductRepository
     Page<Product> findByActiveTrueOrderBySalesCountDesc(
             Pageable pageable
     );
+    
+    Page<Product> findAllByOrderByCreatedAtDesc(
+            Pageable pageable
+    );
+
+    Page<Product> findByActiveOrderByCreatedAtDesc(
+            boolean active,
+            Pageable pageable
+    );
+
 
     @Query("""
             SELECT COUNT(p)

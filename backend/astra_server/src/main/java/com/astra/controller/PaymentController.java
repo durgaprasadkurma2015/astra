@@ -19,110 +19,124 @@ public class PaymentController {
     public PaymentController(
             PaymentService paymentService
     ) {
-
-        this.paymentService =
-                paymentService;
+        this.paymentService = paymentService;
     }
 
     /**
-     * Initiate payment.
+     * Initiate payment for an order.
      */
     @PostMapping("/orders/{orderId}/initiate")
-    public ResponseEntity<PaymentResponse>
-    initiatePayment(
+    public ResponseEntity<PaymentResponse> initiatePayment(
             Authentication authentication,
             @PathVariable Long orderId,
-            @Valid @RequestBody
-            PaymentInitiateRequest request
+            @Valid @RequestBody PaymentInitiateRequest request
     ) {
 
-        return ResponseEntity.ok(
+        PaymentResponse response =
                 paymentService.initiatePayment(
                         authentication.getName(),
                         orderId,
                         request
-                )
-        );
+                );
+
+        return ResponseEntity.ok(response);
     }
 
     /**
-     * Get payment.
+     * Get payment by payment ID.
      */
     @GetMapping("/{paymentId}")
-    public ResponseEntity<PaymentResponse>
-    getPayment(
+    public ResponseEntity<PaymentResponse> getPayment(
             Authentication authentication,
             @PathVariable Long paymentId
     ) {
 
-        return ResponseEntity.ok(
+        PaymentResponse response =
                 paymentService.getPayment(
                         authentication.getName(),
                         paymentId
-                )
-        );
+                );
+
+        return ResponseEntity.ok(response);
     }
 
     /**
-     * Mock success endpoint.
+     * Get payment for an order.
+     */
+    @GetMapping("/orders/{orderId}")
+    public ResponseEntity<PaymentResponse> getOrderPayment(
+            Authentication authentication,
+            @PathVariable Long orderId
+    ) {
+
+        PaymentResponse response =
+                paymentService.getOrderPayment(
+                        authentication.getName(),
+                        orderId
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Mock/sandbox payment success.
      *
-     * This is ONLY for local development/testing.
+     * For local development/testing only.
      */
     @PostMapping("/{paymentId}/success")
-    public ResponseEntity<PaymentResponse>
-    markSuccess(
+    public ResponseEntity<PaymentResponse> markSuccess(
             Authentication authentication,
             @PathVariable Long paymentId
     ) {
 
-        return ResponseEntity.ok(
+        PaymentResponse response =
                 paymentService.markSuccess(
                         authentication.getName(),
                         paymentId
-                )
-        );
+                );
+
+        return ResponseEntity.ok(response);
     }
 
     /**
-     * Mock failure endpoint.
+     * Mock payment failure.
+     *
+     * For local development/testing.
      */
     @PostMapping("/{paymentId}/fail")
-    public ResponseEntity<PaymentResponse>
-    markFailed(
+    public ResponseEntity<PaymentResponse> markFailed(
             Authentication authentication,
             @PathVariable Long paymentId,
-            @RequestParam(
-                    required = false
-            )
-            String reason
+            @RequestParam(required = false) String reason
     ) {
 
-        return ResponseEntity.ok(
+        PaymentResponse response =
                 paymentService.markFailed(
                         authentication.getName(),
                         paymentId,
                         reason
-                )
-        );
+                );
+
+        return ResponseEntity.ok(response);
     }
 
     /**
-     * Refund payment.
+     * Refund a paid payment.
      *
      * Local/mock implementation for Phase 10.
      */
     @PostMapping("/{paymentId}/refund")
-    public ResponseEntity<PaymentResponse>
-    refundPayment(
+    public ResponseEntity<PaymentResponse> refundPayment(
             Authentication authentication,
             @PathVariable Long paymentId
     ) {
 
-        return ResponseEntity.ok(
+        PaymentResponse response =
                 paymentService.refundPayment(
                         authentication.getName(),
                         paymentId
-                )
-        );
+                );
+
+        return ResponseEntity.ok(response);
     }
 }

@@ -1,13 +1,14 @@
 package com.astra.category.controller;
 
-import jakarta.validation.Valid;
-
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
 import com.astra.category.dto.CategoryRequest;
 import com.astra.category.dto.CategoryResponse;
 import com.astra.category.service.CategoryService;
+
+import jakarta.validation.Valid;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -23,12 +24,16 @@ public class CategoryController {
 
     @GetMapping
     public ResponseEntity<List<CategoryResponse>> getAll() {
-        return ResponseEntity.ok(service.getAll());
+
+        return ResponseEntity.ok(
+                service.getAll()
+        );
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<CategoryResponse> getById(
-            @PathVariable Long id) {
+            @PathVariable Long id
+    ) {
 
         return ResponseEntity.ok(
                 service.getById(id)
@@ -37,17 +42,19 @@ public class CategoryController {
 
     @PostMapping
     public ResponseEntity<CategoryResponse> create(
-            @Valid @RequestBody CategoryRequest request) {
+            @Valid @RequestBody CategoryRequest request
+    ) {
 
-        return ResponseEntity.ok(
-                service.create(request)
-        );
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(service.create(request));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<CategoryResponse> update(
             @PathVariable Long id,
-            @Valid @RequestBody CategoryRequest request) {
+            @Valid @RequestBody CategoryRequest request
+    ) {
 
         return ResponseEntity.ok(
                 service.update(id, request)
@@ -56,7 +63,8 @@ public class CategoryController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
-            @PathVariable Long id) {
+            @PathVariable Long id
+    ) {
 
         service.delete(id);
 

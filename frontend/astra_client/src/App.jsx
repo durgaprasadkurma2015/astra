@@ -1,61 +1,53 @@
-import { lazy, Suspense, useEffect } from 'react';
-import { useDispatch } from 'react-redux';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { logout } from './store/authSlice';
-import ErrorBoundary from './components/common/ErrorBoundary';
-import { ToastProvider } from './context/ToastContext';
-
-const Home = lazy(() => import('./pages/Home'));
-const ProductListing = lazy(() => import('./pages/ProductListing'));
-const ProductDetails = lazy(() => import('./pages/ProductDetails'));
-const Cart = lazy(() => import('./pages/Cart'));
-const Checkout = lazy(() => import('./pages/Checkout'));
-const Orders = lazy(() => import('./pages/Orders'));
-const OrderDetails = lazy(() => import('./pages/OrderDetails'));
-const Wishlist = lazy(() => import('./pages/Wishlist'));
-const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
-const Notifications = lazy(() => import('./pages/Notifications'));
-const Recommendations = lazy(() => import('./pages/Recommendations'));
-const Tracking = lazy(() => import('./pages/Tracking'));
-const Returns = lazy(() => import('./pages/Returns'));
-const NotFound = lazy(() => import('./pages/NotFound'));
-
-function LoadingScreen() {
-  return <main className="loading-screen" aria-busy="true"><div className="spinner"/><p>Loading ASTRA…</p></main>;
-}
+import { Routes, Route } from "react-router-dom";
+import Layout from "./components/Layout";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Products from "./pages/Products";
+import ProductDetails from "./pages/ProductDetails";
+import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
+import Orders from "./pages/Orders";
+import OrderDetails from "./pages/OrderDetails";
+import Profile from "./pages/Profile";
+import Wishlist from "./pages/Wishlist";
+import ForgotPassword from "./pages/ForgotPassword";
+import AdminDashboard from "./pages/AdminDashboard";
+import SellerDashboard from "./pages/SellerDashboard";
+import NotFound from "./pages/NotFound";
 
 export default function App() {
-  const dispatch = useDispatch();
-  useEffect(() => {
-    const handler = () => dispatch(logout());
-    window.addEventListener('astra:session-expired', handler);
-    return () => window.removeEventListener('astra:session-expired', handler);
-  }, [dispatch]);
+  return <Layout>
+    <Routes>
+      <Route path="/" element={<Home/>}/>
+      <Route path="/login" element={<Login/>}/>
+      <Route path="/register" element={<Register/>}/>
+      <Route path="/forgot-password" element={<ForgotPassword/>}/>
+      <Route path="/products" element={<Products/>}/>
+      <Route path="/products/:id" element={<ProductDetails/>}/>
+      <Route path="/cart" element={<Cart/>}/>
+      <Route path="/wishlist" element={<Wishlist/>}/>
+      <Route element={<ProtectedRoute/>}>
+        <Route path="/checkout" element={<Checkout/>}/>
+        <Route path="/orders" element={<Orders/>}/>
+        <Route path="/orders/:id" element={<OrderDetails/>}/>
+        <Route path="/profile" element={<Profile/>}/>
+        <Route path="/shipments" element={<NotFound/>}/>
+      </Route>
+      <Route element={<ProtectedRoute roles={["ADMIN"]}/>}>
+        <Route path="/admin" element={<AdminDashboard/>}/>
+      </Route>
+      <Route path="/search" element={<Products />} />
+<Route path="/search" element={<Products />} />
+<Route path="/products" element={<Products />} />
+<Route path="/search" element={<Products />} />
+<Route path="/products/:id" element={<ProductDetails />} />
 
-  return (
-    <ErrorBoundary>
-      <ToastProvider>
-        <BrowserRouter>
-          <Suspense fallback={<LoadingScreen />}>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/products" element={<ProductListing />} />
-              <Route path="/products/:slug" element={<ProductDetails />} />
-              <Route path="/cart" element={<Cart />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/orders/:orderNumber" element={<OrderDetails />} />
-              <Route path="/wishlist" element={<Wishlist />} />
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/recommendations" element={<Recommendations />} />
-              <Route path="/tracking" element={<Tracking />} />
-              <Route path="/returns" element={<Returns />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </ToastProvider>
-    </ErrorBoundary>
-  );
+      <Route element={<ProtectedRoute roles={["SELLER","ADMIN"]}/>}>
+        <Route path="/seller" element={<SellerDashboard/>}/>
+      </Route>
+      <Route path="*" element={<NotFound/>}/>
+    </Routes>
+  </Layout>;
 }

@@ -2,6 +2,7 @@ package com.astra.repository;
 
 import com.astra.entity.Order;
 import com.astra.enums.OrderStatus;
+import com.astra.enums.PaymentStatus;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,9 +32,24 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             String orderNumber
     );
 
+    Page<Order> findAllByOrderByCreatedAtDesc(
+            Pageable pageable
+    );
+
+    Page<Order> findByStatusOrderByCreatedAtDesc(
+            OrderStatus status,
+            Pageable pageable
+    );
+
+    Page<Order> findByPaymentStatusOrderByCreatedAtDesc(
+            PaymentStatus paymentStatus,
+            Pageable pageable
+    );
+
     @Query("""
         SELECT COALESCE(SUM(o.total), 0)
         FROM Order o
+        WHERE o.paymentStatus = com.astra.enums.PaymentStatus.PAID
     """)
     BigDecimal calculateTotalRevenue();
 

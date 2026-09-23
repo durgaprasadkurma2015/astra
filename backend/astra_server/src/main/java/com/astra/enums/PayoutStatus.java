@@ -1,5 +1,10 @@
 package com.astra.enums;
 
-public class PayoutStatus {
+public enum PayoutStatus {
 
+    PENDING,
+    PROCESSING,
+    PAID,
+    FAILED,
+    CANCELLED
 }

@@ -8,6 +8,7 @@ import com.astra.product.dto.ProductRequest;
 import com.astra.product.dto.ProductResponse;
 import com.astra.repository.CategoryRepository;
 import com.astra.repository.ProductImageRepository;
+import com.astra.repository.ProductInventoryRepository;
 import com.astra.repository.ProductRepository;
 
 import org.springframework.data.domain.*;
@@ -22,16 +23,21 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ProductImageRepository productImageRepository;
+    private final ProductInventoryRepository productInventoryRepository;
+
 
     public ProductService(
             ProductRepository productRepository,
             CategoryRepository categoryRepository,
-            ProductImageRepository productImageRepository) {
+            ProductImageRepository productImageRepository,
+            ProductInventoryRepository productInventoryRepository) {
 
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.productImageRepository = productImageRepository;
+        this.productInventoryRepository = productInventoryRepository;
     }
+
 
     public Page<ProductResponse> getProducts(
             int page,

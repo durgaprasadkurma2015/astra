@@ -53,7 +53,7 @@ public class UserController {
         );
     }
 
-    @PutMapping("/me")
+    @PutMapping("/me/profile")
     public ResponseEntity<UserProfileResponse> updateProfile(
             Authentication authentication,
             @Valid @RequestBody UpdateProfileRequest request) {

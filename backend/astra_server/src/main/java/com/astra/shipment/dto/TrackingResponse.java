@@ -1,5 +1,28 @@
 package com.astra.shipment.dto;
 
-public class TrackingResponse {
+import java.time.LocalDateTime;
 
+public record TrackingResponse(
+
+        Long shipmentId,
+
+        Long orderId,
+
+        String orderNumber,
+
+        String trackingNumber,
+
+        String carrier,
+
+        String status,
+
+        String currentLocation,
+
+        String estimatedDelivery,
+
+        LocalDateTime shippedAt,
+
+        LocalDateTime deliveredAt
+
+) {
 }

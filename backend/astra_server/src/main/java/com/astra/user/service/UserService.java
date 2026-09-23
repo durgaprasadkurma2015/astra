@@ -3,13 +3,19 @@ package com.astra.user.service;
 import com.astra.dto.UpdateProfileRequest;
 import com.astra.dto.UserProfileResponse;
 import com.astra.entity.User;
+import com.astra.exception.BadRequestException;
+import com.astra.exception.UserNotFoundException;
 import com.astra.repository.UserRepository;
 import com.astra.user.dto.ChangePasswordRequest;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Objects;
 
 @Service
+@Transactional
 public class UserService {
 
     private final UserRepository userRepository;
@@ -27,11 +33,12 @@ public class UserService {
 
         return userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new RuntimeException(
+                        new UserNotFoundException(
                                 "User not found: " + userId
                         ));
     }
 
+    @Transactional(readOnly = true)
     public UserProfileResponse getProfile(Long userId) {
 
         User user = getUser(userId);
@@ -46,8 +53,51 @@ public class UserService {
 
         User user = getUser(userId);
 
-        user.setName(request.name());
-        user.setPhone(request.phone());
+        String name = request.name() == null
+                ? null
+                : request.name().trim();
+
+        if (name == null || name.isBlank()) {
+            throw new BadRequestException(
+                    "Name is required"
+            );
+        }
+
+        String phone = request.phone();
+
+        if (phone != null) {
+            phone = phone.trim();
+
+            if (phone.isBlank()) {
+                phone = null;
+            }
+        }
+
+        String oldPhone = user.getPhone();
+
+        /*
+         * Prevent the same phone number from
+         * being assigned to another user.
+         */
+        if (phone != null &&
+                !phone.equals(oldPhone) &&
+                userRepository.existsByPhone(phone)) {
+
+            throw new BadRequestException(
+                    "Phone number is already registered"
+            );
+        }
+
+        user.setName(name);
+        user.setPhone(phone);
+
+        /*
+         * Changing the phone number invalidates
+         * the previous phone verification.
+         */
+        if (!Objects.equals(oldPhone, phone)) {
+            user.setPhoneVerified(false);
+        }
 
         User savedUser = userRepository.save(user);
 
@@ -61,12 +111,24 @@ public class UserService {
 
         User user = getUser(userId);
 
+        /*
+         * Google-only accounts may not have
+         * a local password.
+         */
+        if (user.getPassword() == null ||
+                user.getPassword().isBlank()) {
+
+            throw new BadRequestException(
+                    "Password change is not available for this account"
+            );
+        }
+
         if (!passwordEncoder.matches(
                 request.currentPassword(),
                 user.getPassword()
         )) {
 
-            throw new RuntimeException(
+            throw new BadRequestException(
                     "Current password is incorrect"
             );
         }
@@ -76,7 +138,7 @@ public class UserService {
                 user.getPassword()
         )) {
 
-            throw new RuntimeException(
+            throw new BadRequestException(
                     "New password must be different from current password"
             );
         }

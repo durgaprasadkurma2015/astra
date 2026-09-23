@@ -9,4 +9,6 @@ public record UserProfileResponse(
         boolean emailVerified,
         boolean phoneVerified
 ) {
+	
+	
 }

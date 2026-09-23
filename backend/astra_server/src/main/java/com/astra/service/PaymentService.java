@@ -4,23 +4,21 @@ import com.astra.dto.PaymentInitiateRequest;
 import com.astra.dto.PaymentResponse;
 import com.astra.entity.Order;
 import com.astra.entity.PaymentTransaction;
-import com.astra.entity.Product;
 import com.astra.entity.User;
 import com.astra.enums.OrderStatus;
 import com.astra.enums.PaymentMethod;
 import com.astra.enums.PaymentStatus;
 import com.astra.integration.PaymentGateway;
 import com.astra.integration.PaymentGatewayResult;
+import com.astra.inventory.service.InventoryService;
 import com.astra.repository.OrderRepository;
 import com.astra.repository.PaymentTransactionRepository;
-import com.astra.repository.ProductRepository;
 import com.astra.repository.UserRepository;
 
 import jakarta.transaction.Transactional;
 
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
@@ -30,21 +28,21 @@ public class PaymentService {
     private final PaymentTransactionRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
-    private final ProductRepository productRepository;
     private final PaymentGateway paymentGateway;
+    private final InventoryService inventoryService;
 
     public PaymentService(
             PaymentTransactionRepository paymentRepository,
             OrderRepository orderRepository,
             UserRepository userRepository,
-            ProductRepository productRepository,
-            PaymentGateway paymentGateway
+            PaymentGateway paymentGateway,
+            InventoryService inventoryService
     ) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
         this.userRepository = userRepository;
-        this.productRepository = productRepository;
         this.paymentGateway = paymentGateway;
+        this.inventoryService = inventoryService;
     }
 
     /**
@@ -70,18 +68,21 @@ public class PaymentService {
                 );
 
         if (order.getStatus() == OrderStatus.CANCELLED) {
+
             throw new IllegalArgumentException(
                     "Cannot pay for cancelled order"
             );
         }
 
         if (order.getPaymentStatus() == PaymentStatus.PAID) {
+
             throw new IllegalArgumentException(
                     "Order has already been paid"
             );
         }
 
         if (request.paymentMethod() == PaymentMethod.COD) {
+
             throw new IllegalArgumentException(
                     "COD payment is not implemented in Phase 10"
             );
@@ -223,6 +224,7 @@ public class PaymentService {
         }
 
         if (payment.getStatus() == PaymentStatus.REFUNDED) {
+
             throw new IllegalArgumentException(
                     "Refunded payment cannot be marked paid"
             );
@@ -292,6 +294,7 @@ public class PaymentService {
                 );
 
         if (payment.getStatus() == PaymentStatus.PAID) {
+
             throw new IllegalArgumentException(
                     "Paid payment cannot be marked failed"
             );
@@ -329,6 +332,7 @@ public class PaymentService {
                 );
 
         if (payment.getStatus() != PaymentStatus.PAID) {
+
             throw new IllegalArgumentException(
                     "Only paid payments can be refunded"
             );
@@ -338,6 +342,7 @@ public class PaymentService {
                 paymentGateway.refundPayment(payment);
 
         if (!result.success()) {
+
             throw new IllegalArgumentException(
                     "Refund failed: "
                             + result.message()
@@ -354,6 +359,22 @@ public class PaymentService {
 
         Order order = payment.getOrder();
 
+        /*
+         * Return reserved inventory.
+         *
+         * The order was confirmed after payment.
+         * Therefore the inventory was still reserved.
+         */
+        for (var item : order.getItems()) {
+
+            inventoryService.release(
+                    item.getProduct().getId(),
+                    item.getQuantity(),
+                    order,
+                    "Inventory released after payment refund"
+            );
+        }
+
         order.setPaymentStatus(
                 PaymentStatus.REFUNDED
         );
@@ -362,68 +383,11 @@ public class PaymentService {
                 OrderStatus.CANCELLED
         );
 
-        /*
-         * Restore inventory after refund.
-         */
-        restoreInventory(order);
-
         orderRepository.save(order);
 
         return toResponse(
                 paymentRepository.save(payment)
         );
-    }
-
-    /**
-     * Restore product inventory and sales count.
-     *
-     * Product.salesCount is Long,
-     * while stockQuantity is Integer.
-     */
-    private void restoreInventory(
-            Order order
-    ) {
-
-        for (var item : order.getItems()) {
-
-            Product product =
-                    item.getProduct();
-
-            /*
-             * stockQuantity is Integer.
-             */
-            int currentStock =
-                    product.getStockQuantity() == null
-                            ? 0
-                            : product.getStockQuantity();
-
-            int restoredStock =
-                    currentStock + item.getQuantity();
-
-            product.setStockQuantity(
-                    restoredStock
-            );
-
-            /*
-             * salesCount is Long.
-             */
-            long currentSales =
-                    product.getSalesCount() == null
-                            ? 0L
-                            : product.getSalesCount();
-
-            long restoredSales =
-                    Math.max(
-                            0L,
-                            currentSales - item.getQuantity()
-                    );
-
-            product.setSalesCount(
-                    restoredSales
-            );
-
-            productRepository.save(product);
-        }
     }
 
     private PaymentTransaction getPaymentEntity(
@@ -446,15 +410,13 @@ public class PaymentService {
 
     /**
      * Resolve authenticated user.
-     *
-     * UserRepository defines:
-     * findByEmailIgnoreCase(String)
      */
     private User getUser(
             String email
     ) {
 
         if (email == null || email.isBlank()) {
+
             throw new IllegalArgumentException(
                     "Authenticated user email is missing"
             );
