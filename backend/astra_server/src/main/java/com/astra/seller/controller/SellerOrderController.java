@@ -1,5 +1,4 @@
 package com.astra.seller.controller;
-
-public class SellerOrderController {
-
-}
+import com.astra.seller.dto.SellerOrderResponse; import com.astra.seller.service.SellerOrderService; import org.springframework.data.domain.Page; import org.springframework.security.access.prepost.PreAuthorize; import org.springframework.security.core.Authentication; import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/api/v1/sellers/orders") @PreAuthorize("hasRole('SELLER')")
+public class SellerOrderController { private final SellerOrderService service; public SellerOrderController(SellerOrderService service){this.service=service;} @GetMapping public Page<SellerOrderResponse> list(Authentication a,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size){return service.list(a.getName(),page,size);} }

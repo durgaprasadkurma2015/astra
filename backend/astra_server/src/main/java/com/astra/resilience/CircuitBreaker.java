@@ -1,0 +1,14 @@
+package com.astra.resilience;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface CircuitBreaker {
+    String name();
+    int failureThreshold() default 5;
+    long openDurationMs() default 30000;
+}

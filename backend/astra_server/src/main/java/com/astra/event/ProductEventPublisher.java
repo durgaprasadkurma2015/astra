@@ -1,0 +1,5 @@
+package com.astra.event;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider; import org.springframework.kafka.core.KafkaTemplate; import org.springframework.stereotype.Component; import org.slf4j.*;
+@Component public class ProductEventPublisher { private static final Logger log=LoggerFactory.getLogger(ProductEventPublisher.class); private final KafkaTemplate<String,ProductEvent> kafka; private final String topic;
+    private final RabbitProductEventPublisher rabbitPublisher; public ProductEventPublisher(KafkaTemplate<String,ProductEvent> kafka,@Value("${astra.kafka.product-topic:astra.product.events}") String topic, ObjectProvider<RabbitProductEventPublisher> rabbitPublisher){this.kafka=kafka;this.topic=topic;this.rabbitPublisher=rabbitPublisher.getIfAvailable();} public void publish(String type,Long id){ProductEvent event = new ProductEvent(type,id,java.time.Instant.now()); try{kafka.send(topic,String.valueOf(id),event);}catch(Exception e){log.warn("Kafka unavailable while publishing product event {} for {}",type,id,e);} if (rabbitPublisher != null) { rabbitPublisher.publish(event); }} }

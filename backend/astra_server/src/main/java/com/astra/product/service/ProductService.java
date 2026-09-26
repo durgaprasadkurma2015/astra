@@ -10,10 +10,14 @@ import com.astra.repository.CategoryRepository;
 import com.astra.repository.ProductImageRepository;
 import com.astra.repository.ProductInventoryRepository;
 import com.astra.repository.ProductRepository;
+import com.astra.event.ProductEventPublisher;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 
 import org.springframework.data.domain.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -24,18 +28,21 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final ProductImageRepository productImageRepository;
     private final ProductInventoryRepository productInventoryRepository;
+    private final ProductEventPublisher eventPublisher;
 
 
     public ProductService(
             ProductRepository productRepository,
             CategoryRepository categoryRepository,
             ProductImageRepository productImageRepository,
-            ProductInventoryRepository productInventoryRepository) {
+            ProductInventoryRepository productInventoryRepository,
+            ProductEventPublisher eventPublisher) {
 
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.productImageRepository = productImageRepository;
         this.productInventoryRepository = productInventoryRepository;
+        this.eventPublisher = eventPublisher;
     }
 
 
@@ -69,6 +76,8 @@ public class ProductService {
         return products.map(this::toResponse);
     }
 
+    @Transactional(readOnly = true)
+    @Cacheable(cacheNames="products", key="#id")
     public ProductResponse getById(Long id) {
 
         Product product = productRepository.findById(id)
@@ -82,6 +91,8 @@ public class ProductService {
         return toResponse(product);
     }
 
+    @Transactional
+    @CacheEvict(cacheNames={"products","productLists"}, allEntries=true)
     public ProductResponse create(ProductRequest request) {
 
         Category category =
@@ -113,9 +124,13 @@ public class ProductService {
                 .salesCount(0L)
                 .build();
 
-        return toResponse(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        eventPublisher.publish("CREATED", saved.getId());
+        return toResponse(saved);
     }
 
+    @Transactional
+    @CacheEvict(cacheNames={"products","productLists"}, allEntries=true)
     public ProductResponse update(
             Long id,
             ProductRequest request) {
@@ -150,9 +165,13 @@ public class ProductService {
         product.setCategory(category);
         product.setThumbnailUrl(request.thumbnailUrl());
 
-        return toResponse(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        eventPublisher.publish("UPDATED", saved.getId());
+        return toResponse(saved);
     }
 
+    @Transactional
+    @CacheEvict(cacheNames={"products","productLists"}, allEntries=true)
     public void delete(Long id) {
 
         Product product = productRepository.findById(id)
@@ -166,6 +185,7 @@ public class ProductService {
         product.setActive(false);
 
         productRepository.save(product);
+        eventPublisher.publish("DELETED", product.getId());
     }
 
     public Page<ProductResponse> search(

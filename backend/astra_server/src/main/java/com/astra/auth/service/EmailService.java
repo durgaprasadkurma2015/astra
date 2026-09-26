@@ -7,6 +7,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Backoff;
 
 @Service
 public class EmailService {
@@ -20,39 +24,30 @@ public class EmailService {
         this.mailSender = mailSender;
     }
 
-    // =========================================================
-    // SEND OTP EMAIL
-    // =========================================================
-
+    @Async("astraTaskExecutor")
+    @Retryable(
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 1000, multiplier = 2.0)
+    )
     public void sendOtp(String to, String otp) {
 
         try {
-
-            MimeMessage message =
-                    mailSender.createMimeMessage();
+            MimeMessage message = mailSender.createMimeMessage();
 
             MimeMessageHelper helper =
-                    new MimeMessageHelper(
-                            message,
-                            true,
-                            "UTF-8"
-                    );
+                    new MimeMessageHelper(message, true, "UTF-8");
 
             helper.setFrom(fromEmail);
             helper.setTo(to);
-            helper.setSubject(
-                    "Verify Your Astra Account"
-            );
+            helper.setSubject("Verify Your Astra Account");
 
-            helper.setText(
-                    buildOtpEmail(otp),
-                    true
-            );
+            String html = buildOtpEmail(otp);
+
+            helper.setText(html, true);
 
             mailSender.send(message);
 
         } catch (MessagingException ex) {
-
             throw new RuntimeException(
                     "Failed to send verification email.",
                     ex
@@ -60,41 +55,33 @@ public class EmailService {
         }
     }
 
-    // =========================================================
-    // SEND PASSWORD RESET EMAIL
-    // =========================================================
-
-    public void sendPasswordReset(
-            String to,
-            String resetLink) {
+    @Async("astraTaskExecutor")
+    @Retryable(
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 1000, multiplier = 2.0)
+    )
+    public void sendPasswordReset(String to, String token) {
 
         try {
-
-            MimeMessage message =
-                    mailSender.createMimeMessage();
+            MimeMessage message = mailSender.createMimeMessage();
 
             MimeMessageHelper helper =
-                    new MimeMessageHelper(
-                            message,
-                            true,
-                            "UTF-8"
-                    );
+                    new MimeMessageHelper(message, true, "UTF-8");
 
             helper.setFrom(fromEmail);
             helper.setTo(to);
-            helper.setSubject(
-                    "Reset Your Astra Password"
-            );
+            helper.setSubject("Reset Your Astra Password");
 
-            helper.setText(
-                    buildPasswordResetEmail(resetLink),
-                    true
-            );
+            String resetUrl =
+                    "http://localhost:3000/reset-password?token=" + token;
+
+            String html = buildPasswordResetEmail(resetUrl);
+
+            helper.setText(html, true);
 
             mailSender.send(message);
 
         } catch (MessagingException ex) {
-
             throw new RuntimeException(
                     "Failed to send password reset email.",
                     ex
@@ -102,9 +89,10 @@ public class EmailService {
         }
     }
 
-    // =========================================================
-    // OTP EMAIL HTML
-    // =========================================================
+    @Recover
+    public void recoverEmail(RuntimeException ex, String to, String otp) {
+        // Final failure intentionally handled by the async executor.
+    }
 
     private String buildOtpEmail(String otp) {
 
@@ -114,8 +102,7 @@ public class EmailService {
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport"
-                          content="width=device-width,
-                                   initial-scale=1.0">
+                          content="width=device-width, initial-scale=1.0">
                     <title>Verify Your Astra Account</title>
                 </head>
 
@@ -126,41 +113,36 @@ public class EmailService {
                     font-family:Arial,Helvetica,sans-serif;
                 ">
 
-                    <table
-                        width="100%%"
-                        cellpadding="0"
-                        cellspacing="0"
-                        border="0"
-                        style="
-                            background-color:#f4f7fb;
-                            padding:40px 15px;
-                        "
-                    >
+                    <table width="100%%"
+                           cellpadding="0"
+                           cellspacing="0"
+                           border="0"
+                           style="
+                               background-color:#f4f7fb;
+                               padding:40px 15px;
+                           ">
                         <tr>
                             <td align="center">
 
-                                <table
-                                    width="600"
-                                    cellpadding="0"
-                                    cellspacing="0"
-                                    border="0"
-                                    style="
-                                        max-width:600px;
-                                        width:100%%;
-                                        background:#ffffff;
-                                        border-radius:16px;
-                                        overflow:hidden;
-                                    "
-                                >
+                                <table width="600"
+                                       cellpadding="0"
+                                       cellspacing="0"
+                                       border="0"
+                                       style="
+                                           max-width:600px;
+                                           width:100%%;
+                                           background:#ffffff;
+                                           border-radius:16px;
+                                           overflow:hidden;
+                                       ">
 
                                     <tr>
-                                        <td
-                                            align="center"
+                                        <td align="center"
                                             style="
                                                 background:#2563eb;
                                                 padding:32px 20px;
-                                            "
-                                        >
+                                            ">
+
                                             <div style="
                                                 color:#ffffff;
                                                 font-size:32px;
@@ -176,6 +158,7 @@ public class EmailService {
                                             ">
                                                 Welcome to Astra
                                             </div>
+
                                         </td>
                                     </tr>
 
@@ -204,20 +187,16 @@ public class EmailService {
                                                 your registration.
                                             </p>
 
-                                            <table
-                                                width="100%%"
-                                                cellpadding="0"
-                                                cellspacing="0"
-                                            >
+                                            <table width="100%%"
+                                                   cellpadding="0"
+                                                   cellspacing="0">
                                                 <tr>
-                                                    <td
-                                                        align="center"
+                                                    <td align="center"
                                                         style="
                                                             padding:25px;
                                                             background:#eff6ff;
                                                             border-radius:12px;
-                                                        "
-                                                    >
+                                                        ">
 
                                                         <div style="
                                                             color:#6b7280;
@@ -290,13 +269,12 @@ public class EmailService {
                                     </tr>
 
                                     <tr>
-                                        <td
-                                            align="center"
+                                        <td align="center"
                                             style="
                                                 background:#f9fafb;
                                                 padding:25px;
-                                            "
-                                        >
+                                            ">
+
                                             <strong style="color:#374151;">
                                                 Astra Team
                                             </strong>
@@ -315,6 +293,7 @@ public class EmailService {
                                             ">
                                                 © Astra
                                             </p>
+
                                         </td>
                                     </tr>
 
@@ -329,23 +308,15 @@ public class EmailService {
                 """.replace("{{OTP}}", otp);
     }
 
-    // =========================================================
-    // PASSWORD RESET EMAIL HTML
-    // =========================================================
-
-    private String buildPasswordResetEmail(
-            String resetLink) {
+    private String buildPasswordResetEmail(String resetUrl) {
 
         return """
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <meta charset="UTF-8">
-
                     <meta name="viewport"
-                          content="width=device-width,
-                                   initial-scale=1.0">
-
+                          content="width=device-width, initial-scale=1.0">
                     <title>Reset Your Astra Password</title>
                 </head>
 
@@ -356,44 +327,35 @@ public class EmailService {
                     font-family:Arial,Helvetica,sans-serif;
                 ">
 
-                    <table
-                        width="100%%"
-                        cellpadding="0"
-                        cellspacing="0"
-                        border="0"
-                        style="
-                            background-color:#f4f7fb;
-                            padding:40px 15px;
-                        "
-                    >
-
+                    <table width="100%%"
+                           cellpadding="0"
+                           cellspacing="0"
+                           border="0"
+                           style="
+                               background-color:#f4f7fb;
+                               padding:40px 15px;
+                           ">
                         <tr>
                             <td align="center">
 
-                                <table
-                                    width="600"
-                                    cellpadding="0"
-                                    cellspacing="0"
-                                    border="0"
-                                    style="
-                                        max-width:600px;
-                                        width:100%%;
-                                        background:#ffffff;
-                                        border-radius:16px;
-                                        overflow:hidden;
-                                    "
-                                >
-
-                                    <!-- HEADER -->
+                                <table width="600"
+                                       cellpadding="0"
+                                       cellspacing="0"
+                                       border="0"
+                                       style="
+                                           max-width:600px;
+                                           width:100%%;
+                                           background:#ffffff;
+                                           border-radius:16px;
+                                           overflow:hidden;
+                                       ">
 
                                     <tr>
-                                        <td
-                                            align="center"
+                                        <td align="center"
                                             style="
                                                 background:#2563eb;
                                                 padding:32px 20px;
-                                            "
-                                        >
+                                            ">
 
                                             <div style="
                                                 color:#ffffff;
@@ -413,8 +375,6 @@ public class EmailService {
 
                                         </td>
                                     </tr>
-
-                                    <!-- CONTENT -->
 
                                     <tr>
                                         <td style="padding:40px 35px;">
@@ -436,118 +396,61 @@ public class EmailService {
                                             ">
                                                 We received a request to reset
                                                 your Astra account password.
-                                                Click the button below to create
-                                                a new password.
                                             </p>
-
-                                            <!-- BUTTON -->
-
-                                            <table
-                                                width="100%%"
-                                                cellpadding="0"
-                                                cellspacing="0"
-                                                border="0"
-                                            >
-                                                <tr>
-                                                    <td
-                                                        align="center"
-                                                        style="padding:25px 0;"
-                                                    >
-
-                                                        <a
-                                                            href="{{RESET_LINK}}"
-                                                            style="
-                                                                display:inline-block;
-                                                                background:#2563eb;
-                                                                color:#ffffff;
-                                                                text-decoration:none;
-                                                                font-size:16px;
-                                                                font-weight:bold;
-                                                                padding:14px 30px;
-                                                                border-radius:8px;
-                                                            "
-                                                        >
-                                                            Reset Password
-                                                        </a>
-
-                                                    </td>
-                                                </tr>
-                                            </table>
-
-                                            <p style="
-                                                color:#6b7280;
-                                                font-size:14px;
-                                                line-height:1.6;
-                                                text-align:center;
-                                            ">
-                                                This password reset link will
-                                                expire in
-                                                <strong>30 minutes</strong>.
-                                            </p>
-
-                                            <!-- SECURITY NOTICE -->
 
                                             <div style="
-                                                margin-top:30px;
-                                                padding:18px;
-                                                background:#fff7ed;
-                                                border-left:4px solid #f97316;
-                                                border-radius:8px;
+                                                text-align:center;
+                                                margin:30px 0;
                                             ">
 
-                                                <strong style="color:#9a3412;">
-                                                    Security Notice
-                                                </strong>
-
-                                                <p style="
-                                                    color:#7c2d12;
-                                                    font-size:13px;
-                                                    line-height:1.6;
-                                                    margin-bottom:0;
-                                                ">
-                                                    If you did not request a
-                                                    password reset, you can
-                                                    safely ignore this email.
-                                                    Your password will not
-                                                    be changed.
-                                                </p>
+                                                <a href="{{RESET_URL}}"
+                                                   style="
+                                                       display:inline-block;
+                                                       background:#2563eb;
+                                                       color:#ffffff;
+                                                       padding:14px 28px;
+                                                       border-radius:8px;
+                                                       text-decoration:none;
+                                                       font-weight:bold;
+                                                       font-size:16px;
+                                                   ">
+                                                    Reset Password
+                                                </a>
 
                                             </div>
 
                                             <p style="
-                                                color:#9ca3af;
-                                                font-size:12px;
+                                                color:#6b7280;
+                                                font-size:13px;
                                                 line-height:1.6;
                                                 text-align:center;
-                                                margin-top:25px;
                                             ">
-                                                If the button doesn't work,
-                                                copy and paste the following
-                                                link into your browser:
+                                                If you did not request a password
+                                                reset, you can safely ignore this
+                                                email.
                                             </p>
 
                                             <p style="
-                                                color:#2563eb;
+                                                color:#9ca3af;
                                                 font-size:12px;
-                                                word-break:break-all;
                                                 text-align:center;
+                                                word-break:break-all;
                                             ">
-                                                {{RESET_LINK}}
+                                                If the button does not work,
+                                                copy and paste this URL:
+                                                <br>
+                                                {{RESET_URL}}
                                             </p>
 
                                         </td>
                                     </tr>
 
-                                    <!-- FOOTER -->
-
                                     <tr>
-                                        <td
-                                            align="center"
+                                        <td align="center"
                                             style="
                                                 background:#f9fafb;
                                                 padding:25px;
-                                            "
-                                        >
+                                            ">
 
                                             <strong style="color:#374151;">
                                                 Astra Team
@@ -561,13 +464,6 @@ public class EmailService {
                                                 Please do not reply.
                                             </p>
 
-                                            <p style="
-                                                color:#9ca3af;
-                                                font-size:12px;
-                                            ">
-                                                © Astra
-                                            </p>
-
                                         </td>
                                     </tr>
 
@@ -575,12 +471,10 @@ public class EmailService {
 
                             </td>
                         </tr>
-
                     </table>
 
                 </body>
                 </html>
-                """
-                .replace("{{RESET_LINK}}", resetLink);
+                """.replace("{{RESET_URL}}", resetUrl);
     }
 }

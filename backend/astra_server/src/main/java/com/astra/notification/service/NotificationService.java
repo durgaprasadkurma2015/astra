@@ -31,19 +31,22 @@ public class NotificationService {
     private final EmailNotificationProvider emailProvider;
     private final SmsNotificationProvider smsProvider;
     private final InAppNotificationProvider inAppProvider;
+    private final NotificationSseService notificationSseService;
 
     public NotificationService(
             NotificationRepository notificationRepository,
             UserRepository userRepository,
             EmailNotificationProvider emailProvider,
             SmsNotificationProvider smsProvider,
-            InAppNotificationProvider inAppProvider) {
+            InAppNotificationProvider inAppProvider,
+            NotificationSseService notificationSseService) {
 
         this.notificationRepository = notificationRepository;
         this.userRepository = userRepository;
         this.emailProvider = emailProvider;
         this.smsProvider = smsProvider;
         this.inAppProvider = inAppProvider;
+        this.notificationSseService = notificationSseService;
     }
 
     @Transactional
@@ -124,10 +127,11 @@ public class NotificationService {
             );
         }
 
-        notification =
-                notificationRepository.save(notification);
+        notification = notificationRepository.save(notification);
 
-        return toResponse(notification);
+        NotificationResponse response = toResponse(notification);
+        notificationSseService.publish(user.getEmail(), response);
+        return response;
     }
 
     @Transactional

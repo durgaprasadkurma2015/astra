@@ -11,18 +11,22 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.MediaType;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final com.astra.notification.service.NotificationSseService notificationSseService;
 
     public NotificationController(
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            com.astra.notification.service.NotificationSseService notificationSseService) {
 
-        this.notificationService =
-                notificationService;
+        this.notificationService = notificationService;
+        this.notificationSseService = notificationSseService;
     }
 
     @GetMapping
@@ -34,6 +38,12 @@ public class NotificationController {
                 principal.getName(),
                 pageable
         );
+    }
+
+
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter stream(java.security.Principal principal) {
+        return notificationSseService.subscribe(principal.getName(), 30 * 60 * 1000L);
     }
 
     @GetMapping("/unread")

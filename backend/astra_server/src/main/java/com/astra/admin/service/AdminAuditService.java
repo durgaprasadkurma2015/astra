@@ -1,23 +1,3 @@
 package com.astra.admin.service;
-
-import org.springframework.stereotype.Service;
-
-@Service
-public class AdminAuditService {
-
-    public Object getAuditLogs(
-            Long userId,
-            String action,
-            int page,
-            int size) {
-
-        // TODO: Implement audit log retrieval
-        return null;
-    }
-
-    public Object getAuditLog(Long id) {
-
-        // TODO: Implement audit log retrieval by ID
-        return null;
-    }
-}
+import com.astra.audit.entity.AuditLog; import com.astra.audit.service.AuditLogService; import org.springframework.data.domain.*; import org.springframework.stereotype.Service;
+@Service public class AdminAuditService { private final AuditLogService service; public AdminAuditService(AuditLogService service){this.service=service;} public Page<AuditLog> getAuditLogs(Long userId,String action,int page,int size){return service.find(userId,action,PageRequest.of(Math.max(page,0),Math.min(Math.max(size,1),200),Sort.by("createdAt").descending()));} public AuditLog getAuditLog(Long id){return service.get(id);} }

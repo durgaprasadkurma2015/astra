@@ -2,6 +2,7 @@ package com.astra.admin.service;
 
 import com.astra.admin.dto.AdminSellerResponse;
 import com.astra.entity.Seller;
+import com.astra.entity.Role;
 import com.astra.enums.SellerStatus;
 import com.astra.repository.SellerRepository;
 
@@ -75,6 +76,7 @@ public AdminSellerResponse approve(
     Seller seller = getEntity(sellerId);
 
     seller.setStatus(SellerStatus.ACTIVE);
+    seller.getUser().setRole(Role.RoleName.SELLER);
 
     return toResponse(
             sellerRepository.save(seller)
@@ -114,6 +116,7 @@ public AdminSellerResponse activate(
     Seller seller = getEntity(sellerId);
 
     seller.setStatus(SellerStatus.ACTIVE);
+    seller.getUser().setRole(Role.RoleName.SELLER);
 
     return toResponse(
             sellerRepository.save(seller)
@@ -127,6 +130,7 @@ public AdminSellerResponse close(
     Seller seller = getEntity(sellerId);
 
     seller.setStatus(SellerStatus.CLOSED);
+    seller.getUser().setRole(Role.RoleName.CUSTOMER);
 
     return toResponse(
             sellerRepository.save(seller)

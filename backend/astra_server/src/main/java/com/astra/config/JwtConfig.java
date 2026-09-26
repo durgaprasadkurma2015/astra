@@ -1,5 +1,11 @@
 package com.astra.config;
 
-public class JwtConfig {
+import org.springframework.boot.context.properties.ConfigurationProperties;
 
+@ConfigurationProperties(prefix = "astra.security.jwt")
+public record JwtConfig(
+        String secret,
+        long accessTokenExpiration,
+        long refreshTokenExpiration
+) {
 }

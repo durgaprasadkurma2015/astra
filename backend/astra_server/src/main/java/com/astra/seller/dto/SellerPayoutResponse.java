@@ -1,5 +1,11 @@
 package com.astra.seller.dto;
 
-public class SellerPayoutResponse {
+import com.astra.enums.PayoutStatus;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
-}
+public record SellerPayoutResponse(
+        Long id, BigDecimal amount, PayoutStatus status,
+        String payoutReference, String failureReason,
+        LocalDateTime createdAt, LocalDateTime processedAt
+) {}

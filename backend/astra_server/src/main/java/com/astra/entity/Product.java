@@ -73,6 +73,10 @@ public class Product {
     @Column(length = 500)
     private String thumbnailUrl;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "seller_id")
+    private Seller seller;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

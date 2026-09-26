@@ -1,5 +1,4 @@
 package com.astra.seller.controller;
-
-public class SellerPayoutController {
-
-}
+import com.astra.seller.dto.SellerPayoutResponse; import com.astra.seller.service.SellerPayoutService; import org.springframework.data.domain.Page; import org.springframework.http.*; import org.springframework.security.access.prepost.PreAuthorize; import org.springframework.security.core.Authentication; import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/api/v1/sellers/payouts") @PreAuthorize("hasRole('SELLER')")
+public class SellerPayoutController { private final SellerPayoutService service; public SellerPayoutController(SellerPayoutService service){this.service=service;} @GetMapping public Page<SellerPayoutResponse> list(Authentication a,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size){return service.list(a.getName(),page,size);} @PostMapping public ResponseEntity<SellerPayoutResponse> request(Authentication a){return ResponseEntity.status(HttpStatus.CREATED).body(service.request(a.getName()));} }

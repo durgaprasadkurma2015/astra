@@ -1,5 +1,4 @@
 package com.astra.seller.controller;
-
-public class SellerShipmentController {
-
-}
+import com.astra.dto.UpdateShipmentStatusRequest; import com.astra.shipment.dto.ShipmentResponse; import com.astra.seller.service.SellerShipmentService; import jakarta.validation.Valid; import org.springframework.security.access.prepost.PreAuthorize; import org.springframework.security.core.Authentication; import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/api/v1/sellers/shipments") @PreAuthorize("hasRole('SELLER')")
+public class SellerShipmentController { private final SellerShipmentService service; public SellerShipmentController(SellerShipmentService service){this.service=service;} @PatchMapping("/{shipmentId}/status") public ShipmentResponse updateStatus(Authentication a,@PathVariable Long shipmentId,@Valid @RequestBody UpdateShipmentStatusRequest r){return service.updateStatus(a.getName(),shipmentId,r);} }

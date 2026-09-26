@@ -66,6 +66,16 @@ public interface ProductRepository
             Pageable pageable
     );
 
+    Page<Product> findBySellerIdOrderByCreatedAtDesc(Long sellerId, Pageable pageable);
+
+    Page<Product> findBySellerIdAndActiveTrueOrderByCreatedAtDesc(Long sellerId, Pageable pageable);
+
+    long countBySellerId(Long sellerId);
+
+    long countBySellerIdAndActiveTrue(Long sellerId);
+
+    long countBySellerIdAndStockQuantityLessThanEqual(Long sellerId, Integer quantity);
+
 
     @Query("""
             SELECT COUNT(p)
