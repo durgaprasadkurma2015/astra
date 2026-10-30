@@ -1,0 +1,12 @@
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+
+# Generated dependencies and build output
+frontend/node_modules/
+frontend/dist/
+backend/target/
+backend/logs/

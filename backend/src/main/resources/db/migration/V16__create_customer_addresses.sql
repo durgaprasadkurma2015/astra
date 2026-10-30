@@ -1,0 +1,21 @@
+CREATE TABLE customer_addresses (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    user_email VARCHAR(255) NOT NULL,
+    label VARCHAR(40) NOT NULL,
+    full_name VARCHAR(150) NOT NULL,
+    phone_number VARCHAR(20) NOT NULL,
+    address_line1 VARCHAR(255) NOT NULL,
+    address_line2 VARCHAR(255),
+    landmark VARCHAR(150),
+    city VARCHAR(100) NOT NULL,
+    district VARCHAR(100),
+    state VARCHAR(100) NOT NULL,
+    postal_code VARCHAR(20) NOT NULL,
+    country VARCHAR(100) NOT NULL,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    INDEX idx_customer_addresses_owner (user_email, id),
+    INDEX idx_customer_addresses_default (user_email, is_default)
+);

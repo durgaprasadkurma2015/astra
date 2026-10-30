@@ -1,0 +1,42 @@
+
+package com.astra.backend.cart;
+
+import com.astra.backend.cart.dto.AddToCartRequest;
+import com.astra.backend.cart.dto.CartResponse;
+import com.astra.backend.cart.dto.UpdateCartQuantityRequest;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1/cart")
+public class CartController {
+
+    private final CartService cartService;
+
+    public CartController(CartService cartService) {
+        this.cartService = cartService;
+    }
+
+    @GetMapping
+    public CartResponse getCart() {
+        return cartService.getCart();
+    }
+
+    @PostMapping("/items")
+    public CartResponse addItem(@Valid @RequestBody AddToCartRequest request) {
+        return cartService.addItem(request);
+    }
+
+    @PutMapping("/items/{productId}")
+    public CartResponse updateQuantity(
+        @PathVariable Long productId,
+        @Valid @RequestBody UpdateCartQuantityRequest request
+    ) {
+        return cartService.updateQuantity(productId, request.quantity());
+    }
+
+    @DeleteMapping("/items/{productId}")
+    public CartResponse removeItem(@PathVariable Long productId) {
+        return cartService.removeItem(productId);
+    }
+}
