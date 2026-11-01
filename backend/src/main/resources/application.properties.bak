@@ -1,0 +1,169 @@
+spring.application.name=backend
+
+server.port=8080
+
+# MySQL Database
+spring.datasource.url=${DB_URL:jdbc:mysql://localhost:3306/astra_db?createDatabaseIfNotExist=true}
+spring.datasource.username=${DB_USERNAME}
+spring.datasource.password=${DB_PASSWORD}
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# JPA / Hibernate
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.open-in-view=false
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.jdbc.time_zone=UTC
+spring.jackson.time-zone=UTC
+
+# Security debugging
+logging.level.org.springframework.web=INFO
+logging.level.org.springframework.security=INFO
+#logging.level.org.springframework.security=DEBUG
+
+#debug=true
+
+# Actuator
+# Application information
+info.app.name=Astra E-Commerce
+info.app.description=Astra e-commerce backend
+info.app.version=1.0.0
+management.info.env.enabled=true
+
+# Expose the selected management endpoints
+management.endpoints.web.exposure.include=health,info,metrics,prometheus,loggers,threaddump,scheduledtasks,mappings,caches,conditions,configprops,env,beans,httpexchanges,startup
+
+# Disable shutdown
+management.endpoint.shutdown.enabled=false
+
+# Health details must not be public
+management.endpoint.health.show-details=never
+management.endpoint.health.probes.enabled=true
+
+# Readiness and liveness probes
+management.endpoint.health.group.readiness.include=readinessState,db
+management.endpoint.health.group.liveness.include=livenessState
+
+# Do not expose environment values or bound configuration values
+management.endpoint.env.show-values=never
+management.endpoint.configprops.show-values=never
+
+# HTTP and JVM metrics
+management.metrics.web.server.request.autotime.enabled=true
+management.metrics.tags.application=${spring.application.name}
+
+# Flyway Database Migrations
+spring.flyway.url=${spring.datasource.url}
+spring.flyway.user=${spring.datasource.username}
+spring.flyway.password=${spring.datasource.password}
+spring.flyway.enabled=true
+spring.flyway.locations=classpath:db/migration
+spring.flyway.validate-on-migrate=true
+
+
+
+# JWT
+app.jwt.secret=${JWT_SECRET}
+app.jwt.expiration-ms=900000
+app.auth.refresh-cookie-name=ASTRA_REFRESH
+app.auth.cookie-same-site=${AUTH_COOKIE_SAME_SITE:Lax}
+app.auth.cookie-secure=${AUTH_COOKIE_SECURE:false}
+app.security.auth-rate-limit-window-seconds=${AUTH_RATE_LIMIT_WINDOW_SECONDS:60}
+app.security.login-rate-limit=${AUTH_LOGIN_RATE_LIMIT:10}
+app.security.recovery-rate-limit=${AUTH_RECOVERY_RATE_LIMIT:5}
+
+# Password reset email
+spring.mail.host=${MAIL_HOST:smtp.gmail.com}
+spring.mail.port=${MAIL_PORT:587}
+spring.mail.username=${MAIL_USERNAME}
+spring.mail.password=${MAIL_PASSWORD}
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+spring.mail.properties.mail.smtp.connectiontimeout=5000
+spring.mail.properties.mail.smtp.timeout=5000
+spring.mail.properties.mail.smtp.writetimeout=5000
+
+# ASTRA password reset
+app.password-reset.otp-expiration-seconds=300
+app.password-reset.token-expiration-seconds=600
+app.password-reset.resend-cooldown-seconds=60
+app.password-reset.max-attempts=5
+app.password-reset.otp-hmac-secret=${OTP_HMAC_SECRET}
+app.frontend-url=${FRONTEND_URL:http://localhost:5173}
+
+# Razorpay Online Payments. Leave empty to disable online checkout.
+app.payment.razorpay-key-id=${RAZORPAY_KEY_ID:}
+app.payment.razorpay-key-secret=${RAZORPAY_KEY_SECRET:}
+app.payment.razorpay-webhook-secret=${RAZORPAY_WEBHOOK_SECRET:}
+
+# ==============================
+# Swagger / OpenAPI
+# ==============================
+springdoc.api-docs.path=/v3/api-docs
+springdoc.swagger-ui.path=/swagger-ui.html
+springdoc.swagger-ui.persist-authorization=true
+
+# Swagger UI display
+springdoc.swagger-ui.operations-sorter=method
+springdoc.swagger-ui.tags-sorter=alpha
+springdoc.swagger-ui.display-request-duration=true
+springdoc.swagger-ui.filter=true
+
+# API documentation
+springdoc.show-actuator=true
+
+
+
+# ==============================
+# Connection Pool - HikariCP
+# ==============================
+spring.datasource.hikari.maximum-pool-size=10
+spring.datasource.hikari.minimum-idle=2
+spring.datasource.hikari.connection-timeout=30000
+spring.datasource.hikari.idle-timeout=600000
+spring.datasource.hikari.max-lifetime=1800000
+
+# ==============================
+# JPA Performance
+# ==============================
+#spring.jpa.open-in-view=false
+#spring.jpa.show-sql=false
+spring.jpa.properties.hibernate.jdbc.batch_size=25
+spring.jpa.properties.hibernate.order_inserts=true
+spring.jpa.properties.hibernate.order_updates=true
+
+# ==============================
+# API Error Details
+# ==============================
+server.error.include-message=never
+server.error.include-stacktrace=never
+server.error.include-binding-errors=never
+
+# ==============================
+# Graceful Shutdown
+# ==============================
+server.shutdown=graceful
+spring.lifecycle.timeout-per-shutdown-phase=30s
+
+# ==============================
+# Redis Configuration
+# ==============================
+
+# Redis Configuration
+spring.data.redis.host=localhost
+spring.data.redis.port=6379
+spring.data.redis.timeout=2000ms
+
+# Enable Spring Cache
+spring.cache.type=redis
+
+
+# ==============================
+# Astra file storage
+# ==============================
+app.files.upload-dir=${ASTRA_UPLOAD_DIR:./uploads}
+app.files.max-file-size=10485760
+app.files.max-request-size=12582912
+
+spring.servlet.multipart.max-file-size=${app.files.max-file-size}
+spring.servlet.multipart.max-request-size=${app.files.max-request-size}
+app.files.public-base-url=${ASTRA_PUBLIC_BASE_URL:http://localhost:8080}

@@ -154,6 +154,10 @@ public class AuthService {
         request.setUsedAt(now);
         user.setEmailVerified(true);
         repository.save(user);
+        refreshTokenRepository.revokeAllForUser(
+        	    user.getEmail(),
+        	    LocalDateTime.now(java.time.ZoneOffset.UTC)
+        	);
         return true;
     }
 

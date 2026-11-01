@@ -1,7 +1,6 @@
 
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-
 const HomePage = lazy(() => import("../pages/HomePage"));
 const LoginPage = lazy(() => import("../pages/auth/LoginPage"));
 const RegisterPage = lazy(() => import("../pages/auth/RegisterPage"));
@@ -34,6 +33,8 @@ const AdminReviewsPage = lazy(() => import("../pages/AdminReviewsPage"));
 const AdminLayout = lazy(() => import("../layouts/AdminLayout"));
 const StorefrontLayout = lazy(() => import("../layouts/StorefrontLayout"));
 const CompareProductsPage = lazy(() => import("../pages/CompareProductsPage"));
+const AdminFileManagerPage = lazy(() => import("../pages/AdminFileManagerPage"));
+const MyFilesPage = lazy(() => import("../pages/MyFilesPage"));
 export default function AppRoutes() {
   return (
     <Suspense fallback={<main className="flex min-h-[60vh] items-center justify-center bg-[#09090f] text-sm text-gray-400">Loading page…</main>}>
@@ -62,7 +63,7 @@ export default function AppRoutes() {
             </ProtectedRoute>
           }
         />
-
+<Route path="files" element={<AdminFileManagerPage />} />
         <Route
           path="/checkout"
           element={
@@ -71,7 +72,14 @@ export default function AppRoutes() {
             </ProtectedRoute>
           }
         />
-
+<Route
+  path="/my-files"
+  element={
+    <ProtectedRoute>
+      <MyFilesPage />
+    </ProtectedRoute>
+  }
+/>
         <Route
           path="/order-confirmation/:orderNumber"
           element={

@@ -39,9 +39,10 @@ public class PasswordResetService {
     private final int cooldownSeconds;
     private final int maxAttempts;
     private final AuditService auditService;
-    
+    private final RefreshTokenRepository refreshTokens;
 
     private final SecureRandom random = new SecureRandom();
+    
 
     public PasswordResetService(
         AppUserRepository users,
@@ -57,7 +58,8 @@ public class PasswordResetService {
             int cooldownSeconds,
             @Value("${app.password-reset.max-attempts:5}")
         int maxAttempts,
-        AuditService auditService
+        AuditService auditService,
+        RefreshTokenRepository refreshTokens
         ) {
         this.users = users;
         this.requests = requests;
@@ -69,6 +71,7 @@ public class PasswordResetService {
         this.cooldownSeconds = cooldownSeconds;
         this.maxAttempts = maxAttempts;
         this.auditService = auditService;
+        this.refreshTokens = refreshTokens;
 
         if (hmacSecret.length < 32) {
             throw new IllegalArgumentException(
@@ -134,8 +137,11 @@ public class PasswordResetService {
         String email = normalizeEmail(input.email());
         LocalDateTime now = LocalDateTime.now(java.time.ZoneOffset.UTC);
 
-        AppUser user = users.findByEmail(email)
-            .orElseThrow(this::invalidOtp);
+        AppUser user = users.findByEmail(email).orElse(null);
+
+        if (user == null) {
+            return null;
+        }
 
         var candidates = requests
             .findAllByUser_IdAndUsedAtIsNullOrderByCreatedAtDesc(
@@ -143,28 +149,37 @@ public class PasswordResetService {
             );
 
         if (candidates.isEmpty()) {
-            throw invalidOtp();
+            return null;
         }
 
         PasswordResetRequest request = requests
             .findByIdForUpdate(candidates.get(0).getId())
-            .orElseThrow(this::invalidOtp);
+            .orElse(null);
 
-        if (request.getUsedAt() != null
-            || request.getVerifiedAt() != null
-            || !request.getExpiresAt().isAfter(now)
-            || request.getAttempts() >= maxAttempts) {
-            throw invalidOtp();
+        if (request == null
+                || request.getUsedAt() != null
+                || request.getVerifiedAt() != null
+                || !request.getExpiresAt().isAfter(now)
+                || request.getAttempts() >= maxAttempts) {
+            return null;
         }
 
         request.setAttempts(request.getAttempts() + 1);
 
         String submittedHash = hashOtp(email, input.otp());
 
-        if (!MessageDigest.isEqual(
-                submittedHash.getBytes(StandardCharsets.UTF_8),
-                request.getOtpHash().getBytes(StandardCharsets.UTF_8))) {
-            throw invalidOtp();
+        boolean valid = MessageDigest.isEqual(
+            submittedHash.getBytes(StandardCharsets.UTF_8),
+            request.getOtpHash().getBytes(StandardCharsets.UTF_8)
+        );
+
+        if (!valid) {
+            if (request.getAttempts() >= maxAttempts) {
+                request.setUsedAt(now);
+            }
+
+            // Return normally so the failed attempt is committed.
+            return null;
         }
 
         String resetToken = generateSecureToken();
@@ -174,22 +189,14 @@ public class PasswordResetService {
 
         return resetToken;
     }
-
     @Transactional
     public void resetPassword(ResetPasswordRequest input) {
         LocalDateTime now = LocalDateTime.now(java.time.ZoneOffset.UTC);
         String tokenHash = hashToken(input.resetToken());
 
-        var matching = requests.findAll().stream()
-            .filter(r -> r.getResetTokenHash() != null)
-            .filter(r -> r.getResetTokenHash().equals(tokenHash))
-            .map(PasswordResetRequest::getId)
-            .findFirst()
-            .orElseThrow(this::invalidResetToken);
-
         PasswordResetRequest request = requests
-            .findByIdForUpdate(matching)
-            .orElseThrow(this::invalidResetToken);
+        	    .findByResetTokenHashForUpdate(tokenHash)
+        	    .orElseThrow(this::invalidResetToken);
 
         if (request.getUsedAt() != null
         	    || request.getVerifiedAt() == null
@@ -207,7 +214,11 @@ public class PasswordResetService {
         );
 
         users.save(user);
-
+     // Revoke all existing refresh tokens after password reset.
+        refreshTokens.revokeAllForUser(
+            user.getEmail(),
+            now
+        );
         request.setUsedAt(now);
         request.setResetTokenHash(null);
         requests.save(request);

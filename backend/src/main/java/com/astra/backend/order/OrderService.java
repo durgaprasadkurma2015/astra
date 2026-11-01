@@ -16,6 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.astra.backend.event.publisher.AstraEventPublisher;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -42,6 +43,7 @@ public class OrderService {
     private final CustomerOrderItemRepository orderItemRepository;
     private final CouponService couponService;
     private final RazorpayPaymentService paymentService;
+    private final AstraEventPublisher eventPublisher;
 
     public OrderService(
             CartItemRepository cartRepository,
@@ -49,7 +51,8 @@ public class OrderService {
             CustomerOrderRepository orderRepository,
             CustomerOrderItemRepository orderItemRepository,
             CouponService couponService,
-            RazorpayPaymentService paymentService) {
+            RazorpayPaymentService paymentService,
+            AstraEventPublisher eventPublisher) {
 
         this.cartRepository = cartRepository;
         this.productRepository = productRepository;
@@ -57,6 +60,7 @@ public class OrderService {
         this.orderItemRepository = orderItemRepository;
         this.couponService = couponService;
         this.paymentService = paymentService;
+        this.eventPublisher = eventPublisher;
     }
 
     private String currentEmail() {
@@ -311,6 +315,16 @@ public class OrderService {
                     cartItem.getProduct().getId());
         }
 
+        // Publish only after all checkout operations have succeeded.
+        // Listener executes AFTER the transaction commits.
+        eventPublisher.orderPlaced(
+                savedOrder.getId(),
+                savedOrder.getOrderNumber(),
+                email,
+                savedOrder.getTotalAmount(),
+                savedOrder.getPaymentMethod()
+        );
+
         return toOrderResponse(savedOrder, responseItems);
     }
 
@@ -459,7 +473,11 @@ public class OrderService {
         order.setOrderStatus("CANCELLED");
 
         CustomerOrder savedOrder = orderRepository.saveAndFlush(order);
-
+        eventPublisher.orderCancelled(
+                savedOrder.getId(),
+                savedOrder.getOrderNumber(),
+                savedOrder.getUserEmail()
+        );
         List<OrderItemResponse> responseItems = items.stream()
                 .map(item -> new OrderItemResponse(
                         item.getProduct().getId(),
@@ -503,8 +521,18 @@ public class OrderService {
         }
         order.setRazorpayPaymentId(razorpayPaymentId);
         order.setPaymentStatus("PAID");
-        return buildOrderResponse(orderRepository.save(order));
-    }
+
+        CustomerOrder savedOrder = orderRepository.save(order);
+
+        eventPublisher.paymentCompleted(
+                savedOrder.getId(),
+                savedOrder.getOrderNumber(),
+                savedOrder.getUserEmail(),
+                razorpayPaymentId,
+                savedOrder.getTotalAmount()
+        );
+
+        return buildOrderResponse(savedOrder);  }
 
     @Transactional
     public void recordCapturedPayment(String razorpayOrderId, String paymentId) {
@@ -520,7 +548,16 @@ public class OrderService {
         }
         order.setRazorpayPaymentId(paymentId);
         order.setPaymentStatus("PAID");
-        orderRepository.save(order);
+
+        CustomerOrder savedOrder = orderRepository.save(order);
+
+        eventPublisher.paymentCompleted(
+                savedOrder.getId(),
+                savedOrder.getOrderNumber(),
+                savedOrder.getUserEmail(),
+                paymentId,
+                savedOrder.getTotalAmount()
+        );
     }
 
     // CUSTOMER: Retrieve the logged-in customer's orders.
@@ -653,6 +690,13 @@ public class OrderService {
 
         order.setOrderStatus(newStatus);
         CustomerOrder savedOrder = orderRepository.saveAndFlush(order);
+
+        eventPublisher.orderStatusChanged(
+                savedOrder.getId(),
+                savedOrder.getOrderNumber(),
+                currentStatus,
+                newStatus
+        );
 
         return buildOrderResponse(savedOrder);
     }

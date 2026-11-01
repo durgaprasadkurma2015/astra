@@ -169,15 +169,14 @@ public class AdminProductController {
             return;
         }
 
-        boolean duplicate = productRepository.findAll()
-                .stream()
-                .filter(product -> product.getSku() != null)
-                .filter(product -> normalizedSku.equalsIgnoreCase(
-                        product.getSku().trim()))
-                .anyMatch(product ->
-                        !Objects.equals(
-                                product.getId(),
-                                currentProductId));
+        boolean duplicate;
+
+        if (currentProductId == null) {
+            duplicate = productRepository.existsBySkuIgnoreCase(normalizedSku);
+        } else {
+            duplicate = productRepository
+                    .existsBySkuIgnoreCaseAndIdNot(normalizedSku, currentProductId);
+        }
 
         if (duplicate) {
             throw new ResponseStatusException(

@@ -10,6 +10,8 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -37,9 +39,16 @@ public class PasswordResetController {
 
     @PostMapping("/verify-otp")
     public ResponseEntity<Map<String, String>> verifyOtp(
-        @Valid @RequestBody VerifyOtpRequest request
-    ) {
+            @Valid @RequestBody VerifyOtpRequest request) {
+
         String resetToken = passwordResetService.verifyOtp(request);
+
+        if (resetToken == null) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Invalid or expired OTP"
+            );
+        }
 
         return ResponseEntity.ok(Map.of(
             "resetToken", resetToken,

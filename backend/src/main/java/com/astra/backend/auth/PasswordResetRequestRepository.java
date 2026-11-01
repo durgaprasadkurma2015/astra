@@ -26,4 +26,12 @@ public interface PasswordResetRequestRepository
     Optional<PasswordResetRequest> findByIdForUpdate(
         @Param("id") Long id
     );
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        select r from PasswordResetRequest r
+        where r.resetTokenHash = :tokenHash
+        """)
+    Optional<PasswordResetRequest> findByResetTokenHashForUpdate(
+        @Param("tokenHash") String tokenHash
+    );
 }

@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Locale;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.prepost.PreAuthorize;
+
 
 @Service
 public class ProductReviewService {
@@ -94,7 +96,7 @@ public class ProductReviewService {
                 one
         );
     }
-
+    @PreAuthorize("isAuthenticated()")
     @Transactional
     public ProductReviewResponse createReview(
             Long productId,
@@ -151,13 +153,13 @@ public class ProductReviewService {
 
         return ProductReviewResponse.from(reviewRepository.save(review));
     }
-
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional(readOnly = true)
     public Page<AdminProductReviewResponse> getAdminReviews(Pageable pageable) {
         return reviewRepository.findAllByOrderByCreatedAtDesc(pageable)
                 .map(AdminProductReviewResponse::from);
     }
-
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional
     public AdminProductReviewResponse setPublished(Long reviewId, boolean published) {
         ProductReview review = reviewRepository.findById(reviewId)

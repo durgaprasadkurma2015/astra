@@ -11,7 +11,7 @@ import {
   Package,
 } from "lucide-react";
 import productService from "../services/productService";
-
+import fileService from "../services/fileService";
 const currency = (value) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -87,6 +87,7 @@ export default function AdminProductsPage() {
   const [saving, setSaving] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
   const [formError, setFormError] = useState("");
+  const [imageFile, setImageFile] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -190,10 +191,12 @@ export default function AdminProductsPage() {
     setError("");
     setMessage("");
     setShowForm(true);
+    setImageFile(null);
   }
 
   function openEditForm(product) {
     setEditingProduct(product);
+    setImageFile(null);
 
     setForm({
       name: product.name || "",
@@ -340,18 +343,43 @@ export default function AdminProductsPage() {
     setSaving(true);
 
     try {
-      if (editingProduct) {
-        await productService.updateProduct(editingProduct.id, payload);
-        setMessage(`Product "${payload.name}" updated successfully.`);
-      } else {
-        await productService.createProduct(payload);
-        setMessage(`Product "${payload.name}" created successfully.`);
-      }
+  let savedProduct;
 
-      setShowForm(false);
-      setEditingProduct(null);
-      setForm(emptyForm);
-      setReloadKey((key) => key + 1);
+if (editingProduct) {
+  savedProduct = await productService.updateProduct(
+    editingProduct.id,
+    payload
+  );
+} else {
+  savedProduct = await productService.createProduct(payload);
+}
+
+if (imageFile) {
+  const uploaded = await fileService.uploadProductImage(
+    savedProduct.id,
+    imageFile
+  );
+
+  const updatedPayload = {
+    ...payload,
+    imageUrl: uploaded.contentUrl,
+  };
+
+  await productService.updateProduct(
+    savedProduct.id,
+    updatedPayload
+  );
+}
+
+setMessage(
+  `Product "${payload.name}" saved successfully.`
+);
+
+setShowForm(false);
+setEditingProduct(null);
+setForm(emptyForm);
+setImageFile(null);
+setReloadKey((key) => key + 1);
     } catch (err) {
       setFormError(
         getErrorMessage(
@@ -625,18 +653,42 @@ export default function AdminProductsPage() {
                 )}
               </label>
 
-              <label className="space-y-2 text-sm text-gray-300 sm:col-span-2">
-                <span>Image URL</span>
-                <input
-                  className={inputClass}
-                  type="url"
-                  name="imageUrl"
-                  value={form.imageUrl}
-                  onChange={updateField}
-                  maxLength={1000}
-                  placeholder="https://example.com/product.jpg"
-                />
-              </label>
+          <label className="space-y-2 text-sm text-gray-300 sm:col-span-2">
+  <span>Product image URL (optional)</span>
+
+  <input
+    className={inputClass}
+    type="url"
+    name="imageUrl"
+    value={form.imageUrl}
+    onChange={updateField}
+    maxLength={1000}
+    placeholder="https://example.com/product.jpg"
+  />
+</label>
+
+<label className="space-y-2 text-sm text-gray-300 sm:col-span-2">
+  <span>Or upload a product image</span>
+
+  <input
+    className={inputClass}
+    type="file"
+    accept="image/jpeg,image/png,image/webp"
+    onChange={(event) =>
+      setImageFile(event.target.files?.[0] || null)
+    }
+  />
+
+  <span className="block text-xs text-gray-500">
+    JPG, PNG or WebP. Maximum 10 MiB.
+  </span>
+
+  {imageFile && (
+    <span className="block text-xs text-violet-300">
+      Selected: {imageFile.name}
+    </span>
+  )}
+</label>
 
               <label className="space-y-2 text-sm text-gray-300 sm:col-span-2 lg:col-span-3">
                 <span>Description</span>

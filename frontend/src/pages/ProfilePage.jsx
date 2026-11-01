@@ -24,7 +24,7 @@ import {
 
 import { useAuth } from "../context/useAuth.js";
 import authService from "../services/authService";
-
+import fileService from "../services/fileService";
 const emptyProfile = {
   fullName: "",
   email: "",
@@ -235,7 +235,8 @@ export default function ProfilePage() {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
-
+const [profilePictureUrl, setProfilePictureUrl] = useState("");
+const [pictureUploading, setPictureUploading] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -332,7 +333,76 @@ export default function ProfilePage() {
       setPasswordLoading(false);
     }
   }
+useEffect(() => {
+  let cancelled = false;
+  let objectUrl = null;
 
+  async function loadPicture() {
+    try {
+      const files = await fileService.getMyFiles();
+
+      const picture = files.find(
+        (file) => file.purpose === "PROFILE_IMAGE"
+      );
+
+      if (!picture) return;
+
+      const blob = await fileService.getProfilePictureContent(
+        picture.id
+      );
+
+      objectUrl = URL.createObjectURL(blob);
+
+      if (!cancelled) {
+        setProfilePictureUrl(objectUrl);
+      } else {
+        URL.revokeObjectURL(objectUrl);
+      }
+    } catch {
+      // Keep the existing initials avatar if no picture is available.
+    }
+  }
+
+  void loadPicture();
+
+  return () => {
+    cancelled = true;
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  };
+}, []);
+
+async function handleProfilePictureChange(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+
+  if (!file) return;
+
+  setError("");
+  setMessage("");
+
+  try {
+    setPictureUploading(true);
+
+    const uploaded = await fileService.uploadProfilePicture(file);
+    const blob = await fileService.getProfilePictureContent(uploaded.id);
+    const nextUrl = URL.createObjectURL(blob);
+
+    setProfilePictureUrl((previousUrl) => {
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      return nextUrl;
+    });
+
+    setMessage("Profile picture updated successfully.");
+  } catch (err) {
+    setError(
+      err.response?.data?.detail ||
+      err.response?.data?.message ||
+      "Unable to upload your profile picture."
+    );
+  } finally {
+    setPictureUploading(false);
+  }
+}
   useEffect(() => {
     let cancelled = false;
 
@@ -531,9 +601,17 @@ export default function ProfilePage() {
 
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex min-w-0 items-center gap-5">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-4 border-violet-300/30 bg-gradient-to-br from-violet-500 to-indigo-700 text-2xl font-black shadow-xl shadow-violet-950/40 sm:h-24 sm:w-24 sm:text-3xl">
-                {initials || "A"}
-              </div>
+             <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-violet-300/30 bg-gradient-to-br from-violet-500 to-indigo-700 text-2xl font-black sm:h-24 sm:w-24 sm:text-3xl">
+  {profilePictureUrl ? (
+    <img
+      src={profilePictureUrl}
+      alt="Your profile"
+      className="h-full w-full object-cover"
+    />
+  ) : (
+    initials || "A"
+  )}
+</div>
 
               <div className="min-w-0">
                 <p className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-violet-300">
@@ -642,9 +720,46 @@ export default function ProfilePage() {
                 />
 
                 <div>
-                  <label className="text-sm font-medium text-slate-300">
-                    Age
-                  </label>
+                <div>
+  <label className="text-sm font-medium text-slate-300">
+    Age
+  </label>
+
+  <div className="mt-2 flex min-h-12 items-center rounded-xl border border-white/10 bg-white/[0.025] px-4 text-sm text-slate-300">
+    <CalendarDays
+      size={16}
+      className="mr-2 text-violet-300"
+    />
+
+    {age === "" ? "Not provided" : `${age} years`}
+  </div>
+</div>
+
+<div>
+  <label className="text-sm font-medium text-slate-300">
+    Profile picture
+  </label>
+
+  <div className="mt-2">
+    <label
+      className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 px-4 py-3 text-sm text-slate-200 transition hover:border-violet-400/50 ${
+        pictureUploading
+          ? "cursor-not-allowed opacity-60"
+          : ""
+      }`}
+    >
+      {pictureUploading ? "Uploading..." : "Change picture"}
+
+      <input
+        type="file"
+        className="sr-only"
+        accept="image/jpeg,image/png,image/webp"
+        disabled={pictureUploading}
+        onChange={handleProfilePictureChange}
+      />
+    </label>
+  </div>
+</div>
 
                   <div className="mt-2 flex min-h-12 items-center rounded-xl border border-white/10 bg-white/[0.025] px-4 text-sm text-slate-300">
                     <CalendarDays
@@ -889,9 +1004,17 @@ export default function ProfilePage() {
               </div>
 
               <div className="mt-5 flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.025] p-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-700 text-xl font-black">
-                  {initials || "A"}
-                </div>
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-violet-500 to-indigo-700 text-xl font-black">
+  {profilePictureUrl ? (
+    <img
+      src={profilePictureUrl}
+      alt="Your profile"
+      className="h-full w-full object-cover"
+    />
+  ) : (
+    initials || "A"
+  )}
+</div>
 
                 <div className="min-w-0">
                   <p className="truncate font-semibold">
@@ -904,11 +1027,10 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <p className="mt-4 text-xs leading-5 text-slate-500">
-                Your profile details are loaded from your account.
-                Profile photo upload can be added when image storage
-                support is available.
-              </p>
+         <p className="mt-4 text-xs leading-5 text-slate-500">
+  Your profile details and profile picture are managed
+  through your ASTRA account.
+</p>
             </section>
 
             {/* Account status */}

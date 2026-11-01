@@ -11,6 +11,7 @@ import {
   MessageSquareText,
   Menu,
   X,
+  Files,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -23,6 +24,7 @@ const navItems = [
   { label: "Inventory", path: "/admin/inventory", icon: Warehouse },
   { label: "Coupons", path: "/admin/coupons", icon: TicketPercent },
   { label: "Register Admin", path: "/admin/register", icon: UserPlus },
+  { label: "File Manager", path: "/admin/files", icon: Files },
 ];
 
 export default function AdminLayout() {

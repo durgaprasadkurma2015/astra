@@ -135,4 +135,6 @@ List<Product> findAllByOrderByIdAsc();
     Optional<Product> findByIdForUpdate(
         @Param("id") Long id
     );
+    boolean existsBySkuIgnoreCase(String sku);
+	boolean existsBySkuIgnoreCaseAndIdNot(String sku, Long id);
 }

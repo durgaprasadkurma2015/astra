@@ -22,8 +22,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Value("${app.frontend-url:http://localhost:5173}")
@@ -122,7 +124,7 @@ public class SecurityConfig {
                         "/api/v1/auth/reset-password",
                         "/api/v1/webhooks/razorpay"
                 ).permitAll()
-
+                .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .requestMatchers(
                         "/api/v1/auth/change-password"
                 ).authenticated()
@@ -143,11 +145,30 @@ public class SecurityConfig {
                         "/api/v1/products",
                         "/api/v1/products/**"
                 ).permitAll()
+                .requestMatchers(
+                        "/api/v1/files/public/**"
+                ).permitAll()
 
                 .requestMatchers(
-                        "/api/v1/admin/**"
+                        "/api/v1/files/admin/**"
                 ).hasRole("ADMIN")
 
+                .requestMatchers(
+                        "/api/v1/files/me/**"
+                ).authenticated()
+
+                .requestMatchers(
+                        "/api/v1/files/*/download"
+                ).authenticated()
+                .requestMatchers(
+                	    "/api/v1/files/admin",
+                	    "/api/v1/files/admin/**"
+                	).hasRole("ADMIN")
+                .requestMatchers("/actuator/**").hasRole("ADMIN")
+                	.requestMatchers(
+                	    "/api/v1/files/me",
+                	    "/api/v1/files/me/**"
+                	).authenticated()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(

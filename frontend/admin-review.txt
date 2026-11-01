@@ -1,9 +1,0 @@
-cd /d D:\astra\backend
-
- ASTRA_BOOTSTRAP_ADMIN_ENABLED=true
- ASTRA_BOOTSTRAP_ADMIN_EMAIL=admin@astra.local
- ASTRA_BOOTSTRAP_ADMIN_PASSWORD=Admin@2015
-
-mvn spring-boot:run
-
-curl -i -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbkBhc3RyYS5sb2NhbCIsImlhdCI6MTc5MzA3ODM4NiwiZXhwIjoxNzkzMDc5Mjg2fQ.CdSkjgrmy5Gc-hE175mQHVA6pnUctGH7IfAe_bf3ts4" http://localhost:8080/api/v1/admin/products
