@@ -109,10 +109,12 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
 
                 .requestMatchers(
-                        "/api/v1/health",
-                        "/actuator/health",
-                        "/actuator/health/**",
-                        "/actuator/info",
+                		"/actuator",
+                		"/actuator/*",
+//                        "/api/v1/health",
+//                        "/actuator/health",
+//                        "/actuator/health/**",
+//                        "/actuator/info",
                         "/api/v1/auth/register",
                         "/api/v1/auth/verify-registration-otp",
                         "/api/v1/auth/resend-registration-otp",
@@ -124,6 +126,16 @@ public class SecurityConfig {
                         "/api/v1/auth/reset-password",
                         "/api/v1/webhooks/razorpay"
                 ).permitAll()
+             // API monitoring: only ADMIN can read logs and statistics.
+                .requestMatchers("/api/v1/admin/monitoring/**").hasRole("ADMIN")
+
+                // Frontend log ingestion: authenticated users only.
+                .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/v1/monitoring/frontend"
+                ).authenticated()
+
+                // Existing admin protection.
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .requestMatchers(
                         "/api/v1/auth/change-password"

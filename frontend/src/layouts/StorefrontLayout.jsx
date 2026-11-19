@@ -14,6 +14,7 @@ import {
 import AstraLogo from "../components/common/AstraLogo";
 import { useAuth } from "../context/useAuth";
 import { useWishlist } from "../context/useWishlist";
+import NotificationBell from "../components/NotificationBell";
 
 const navLinkClass = ({ isActive }) =>
   `rounded-xl px-3 py-2 text-sm font-medium transition duration-200 ${
@@ -78,31 +79,35 @@ export default function StorefrontLayout() {
               <Search size={20} />
             </Link>
 
-            {user && (
-              <>
-                <Link
-                  to="/wishlist"
-                  aria-label="Wishlist"
-                  className="relative rounded-xl p-2.5 text-slate-300 transition hover:bg-violet-500/10 hover:text-violet-300"
-                >
-                  <Heart size={21} />
+           {user && (
+  <>
+    <Link
+      to="/wishlist"
+      aria-label="Wishlist"
+      className="relative rounded-xl p-2.5 text-slate-300 transition hover:bg-violet-500/10 hover:text-violet-300"
+    >
+      <Heart size={21} />
 
-                  {wishlistCount > 0 && (
-                    <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-500 px-1 text-[10px] font-bold text-white ring-2 ring-[#080b1b]">
-                      {wishlistCount}
-                    </span>
-                  )}
-                </Link>
+      {wishlistCount > 0 && (
+        <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-500 px-1 text-[10px] font-bold text-white ring-2 ring-[#080b1b]">
+          {wishlistCount}
+        </span>
+      )}
+    </Link>
 
-                <Link
-                  to="/cart"
-                  aria-label="Shopping cart"
-                  className="rounded-xl p-2.5 text-slate-300 transition hover:bg-violet-500/10 hover:text-violet-300"
-                >
-                  <ShoppingCart size={21} />
-                </Link>
-              </>
-            )}
+    <Link
+      to="/cart"
+      aria-label="Shopping cart"
+      className="rounded-xl p-2.5 text-slate-300 transition hover:bg-violet-500/10 hover:text-violet-300"
+    >
+      <ShoppingCart size={21} />
+    </Link>
+
+    {/* NEW: Notification Bell */}
+    <NotificationBell />
+
+  </>
+)}
 
             {!loading && !user && (
               <div className="hidden items-center gap-2 sm:flex">

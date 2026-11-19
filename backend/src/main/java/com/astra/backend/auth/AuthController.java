@@ -205,6 +205,7 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE,
                         refreshCookieService.issue(session).toString())
                 .body(session.response());
+        
     }
 
     @PostMapping("/logout")

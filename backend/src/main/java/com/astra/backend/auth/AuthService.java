@@ -254,6 +254,7 @@ public class AuthService {
 
         // Check whether email is verified
         if (!user.isEmailVerified()) {
+    
             auditService.log(
                 email,
                 "LOGIN",

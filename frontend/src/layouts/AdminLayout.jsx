@@ -12,6 +12,8 @@ import {
   Menu,
   X,
   Files,
+  Activity,
+    Database,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -25,6 +27,13 @@ const navItems = [
   { label: "Coupons", path: "/admin/coupons", icon: TicketPercent },
   { label: "Register Admin", path: "/admin/register", icon: UserPlus },
   { label: "File Manager", path: "/admin/files", icon: Files },
+  { label: "Warehouses", path: "/admin/warehouses", icon: Warehouse },
+  { label: "API Monitor", path: "/admin/api-monitor", icon: Activity },
+  {
+  label: "Database Activity",
+  path: "/admin/database-activity",
+  icon: Database,
+},
 ];
 
 export default function AdminLayout() {

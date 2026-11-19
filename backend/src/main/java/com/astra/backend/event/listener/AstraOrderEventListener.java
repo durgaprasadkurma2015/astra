@@ -2,6 +2,7 @@ package com.astra.backend.event.listener;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -12,22 +13,35 @@ import com.astra.backend.event.model.OrderCancelledEvent;
 import com.astra.backend.event.model.PaymentCompletedEvent;
 import com.astra.backend.event.model.OrderStatusChangedEvent;
 
+import com.astra.backend.kafka.AstraKafkaProducer;
+
 @Component
 public class AstraOrderEventListener {
 
     private static final Logger log =
             LoggerFactory.getLogger(AstraOrderEventListener.class);
 
+    private final AstraKafkaProducer kafkaProducer;
+
+    public AstraOrderEventListener(AstraKafkaProducer kafkaProducer) {
+        this.kafkaProducer = kafkaProducer;
+    }
+
     @Async("taskExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleOrderPlaced(OrderPlacedEvent event) {
 
         log.info(
-                "ASTRA ORDER PLACED | order={} | customer={} | amount={} | method={}",
+                "ASTRA ORDER PLACED | order={} | customer={} | amount={}",
                 event.orderNumber(),
                 event.customerEmail(),
-                event.totalAmount(),
-                event.paymentMethod()
+                event.totalAmount()
+        );
+
+        kafkaProducer.publish(
+                "ORDER_PLACED",
+                String.valueOf(event.orderId()),
+                event
         );
     }
 
@@ -36,9 +50,14 @@ public class AstraOrderEventListener {
     public void handleOrderCancelled(OrderCancelledEvent event) {
 
         log.info(
-                "ASTRA ORDER CANCELLED | order={} | customer={}",
-                event.orderNumber(),
-                event.customerEmail()
+                "ASTRA ORDER CANCELLED | order={}",
+                event.orderNumber()
+        );
+
+        kafkaProducer.publish(
+                "ORDER_CANCELLED",
+                String.valueOf(event.orderId()),
+                event
         );
     }
 
@@ -47,10 +66,15 @@ public class AstraOrderEventListener {
     public void handlePaymentCompleted(PaymentCompletedEvent event) {
 
         log.info(
-                "ASTRA PAYMENT COMPLETED | order={} | paymentId={} | amount={}",
+                "ASTRA PAYMENT COMPLETED | order={} | paymentId={}",
                 event.orderNumber(),
-                event.paymentId(),
-                event.amount()
+                event.paymentId()
+        );
+
+        kafkaProducer.publish(
+                "PAYMENT_COMPLETED",
+                String.valueOf(event.orderId()),
+                event
         );
     }
 
@@ -63,6 +87,12 @@ public class AstraOrderEventListener {
                 event.orderNumber(),
                 event.previousStatus(),
                 event.newStatus()
+        );
+
+        kafkaProducer.publish(
+                "ORDER_STATUS_CHANGED",
+                String.valueOf(event.orderId()),
+                event
         );
     }
 }

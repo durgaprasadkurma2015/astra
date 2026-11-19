@@ -3,6 +3,7 @@ package com.astra.backend.order;
 
 import com.astra.backend.cart.CartItem;
 import com.astra.backend.cart.CartItemRepository;
+import com.astra.backend.inventory.InventoryManagementService;
 import com.astra.backend.coupon.CouponService;
 import com.astra.backend.order.dto.CheckoutRequest;
 import com.astra.backend.order.dto.OrderItemResponse;
@@ -10,13 +11,15 @@ import com.astra.backend.order.dto.OrderResponse;
 import com.astra.backend.order.dto.UpdateOrderStatusRequest;
 import com.astra.backend.product.Product;
 import com.astra.backend.product.ProductRepository;
+import com.astra.backend.event.publisher.AstraEventPublisher;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import com.astra.backend.event.publisher.AstraEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -31,8 +34,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.Optional;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 @Service
 public class OrderService {
@@ -44,6 +45,7 @@ public class OrderService {
     private final CouponService couponService;
     private final RazorpayPaymentService paymentService;
     private final AstraEventPublisher eventPublisher;
+    private final InventoryManagementService inventoryService;
 
     public OrderService(
             CartItemRepository cartRepository,
@@ -52,7 +54,8 @@ public class OrderService {
             CustomerOrderItemRepository orderItemRepository,
             CouponService couponService,
             RazorpayPaymentService paymentService,
-            AstraEventPublisher eventPublisher) {
+            AstraEventPublisher eventPublisher,
+            InventoryManagementService inventoryService) {
 
         this.cartRepository = cartRepository;
         this.productRepository = productRepository;
@@ -61,9 +64,11 @@ public class OrderService {
         this.couponService = couponService;
         this.paymentService = paymentService;
         this.eventPublisher = eventPublisher;
+        this.inventoryService = inventoryService;
     }
 
     private String currentEmail() {
+
         var authentication = SecurityContextHolder
                 .getContext()
                 .getAuthentication();
@@ -118,6 +123,7 @@ public class OrderService {
                         idempotencyKey);
 
         if (existingOrder.isPresent()) {
+
             CustomerOrder order = existingOrder.get();
 
             validateCheckoutRequestHash(order, requestHash);
@@ -136,6 +142,7 @@ public class OrderService {
 
         // Validate cart items before acquiring product locks.
         for (CartItem cartItem : cartItems) {
+
             if (cartItem == null
                     || cartItem.getProduct() == null
                     || cartItem.getProduct().getId() == null
@@ -158,6 +165,7 @@ public class OrderService {
         Map<Long, Product> lockedProducts = new LinkedHashMap<>();
 
         for (Long productId : productIds) {
+
             Product product = productRepository
                     .findByIdForUpdate(productId)
                     .filter(p -> Boolean.TRUE.equals(p.getActive()))
@@ -184,13 +192,17 @@ public class OrderService {
         order.setPhoneNumber(request.phoneNumber());
         order.setShippingAddress(request.shippingAddress());
         order.setOrderStatus("PLACED");
+
         String paymentMethod = request.paymentMethod() == null
                 || request.paymentMethod().isBlank()
                 ? "COD" : request.paymentMethod().trim().toUpperCase(Locale.ROOT);
+
         if (!List.of("COD", "RAZORPAY").contains(paymentMethod)) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Choose a supported payment method");
+                    HttpStatus.BAD_REQUEST,
+                    "Choose a supported payment method");
         }
+
         order.setPaymentMethod(paymentMethod);
         order.setPaymentStatus("PENDING");
 
@@ -200,6 +212,7 @@ public class OrderService {
         List<OrderItemResponse> responseItems = new ArrayList<>();
 
         for (CartItem cartItem : cartItems) {
+
             Long productId = cartItem.getProduct().getId();
             int quantity = cartItem.getQuantity();
 
@@ -249,11 +262,10 @@ public class OrderService {
                     unitPrice,
                     quantity,
                     lineTotal));
-
-            // Product is locked; JPA persists this stock change
-            // within the checkout transaction.
-            product.setStockQuantity(availableStock - quantity);
         }
+
+        // Stock deduction is handled by InventoryManagementService.
+        // Do not call product.setStockQuantity() here.
 
         subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
 
@@ -268,6 +280,7 @@ public class OrderService {
                         ? null
                         : couponService.prepareCheckout(
                                 couponCode, subtotal, email);
+
         BigDecimal discount = checkoutCoupon == null
                 ? BigDecimal.ZERO
                 : checkoutCoupon.discount();
@@ -275,6 +288,7 @@ public class OrderService {
         if (discount == null
                 || discount.signum() < 0
                 || discount.compareTo(subtotal) > 0) {
+
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "The coupon discount is invalid");
@@ -307,6 +321,27 @@ public class OrderService {
         }
 
         orderItemRepository.saveAll(orderItems);
+
+        // Create inventory reservation for this order.
+        List<InventoryManagementService.ReservationItem> reservationItems =
+                orderItems.stream()
+                        .map(item -> new InventoryManagementService.ReservationItem(
+                                item.getProduct().getId(),
+                                item.getQuantity()))
+                        .toList();
+
+        InventoryManagementService.ReservationResult reservation =
+                inventoryService.reserve(
+                        "ORDER",
+                        savedOrder.getOrderNumber(),
+                        email,
+                        1L,
+                        reservationItems,
+                        30);
+
+        // Commit the reservation as part of checkout.
+        inventoryService.commit(reservation.reservationId());
+
         couponService.recordRedemption(checkoutCoupon, email, savedOrder);
 
         for (CartItem cartItem : cartItems) {
@@ -329,6 +364,7 @@ public class OrderService {
     }
 
     private String createCheckoutRequestHash(CheckoutRequest request) {
+
         String customerName = normalizeHashValue(request.customerName());
         String phoneNumber = normalizeHashValue(request.phoneNumber());
         String shippingAddress =
@@ -337,6 +373,7 @@ public class OrderService {
         String couponCode = request.couponCode() == null
                 ? ""
                 : request.couponCode().trim().toUpperCase(Locale.ROOT);
+
         String paymentMethod = request.paymentMethod() == null
                 || request.paymentMethod().isBlank()
                 ? "COD" : request.paymentMethod().trim().toUpperCase(Locale.ROOT);
@@ -359,6 +396,7 @@ public class OrderService {
             }
 
             return hex.toString();
+
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException(
                     "SHA-256 algorithm is unavailable",
@@ -389,6 +427,7 @@ public class OrderService {
     }
 
     private OrderResponse buildOrderResponse(CustomerOrder order) {
+
         List<OrderItemResponse> items =
                 orderItemRepository.findByOrderId(order.getId())
                         .stream()
@@ -406,6 +445,7 @@ public class OrderService {
     // CUSTOMER: Cancel an order.
     @Transactional
     public OrderResponse cancelOrder(String orderNumber) {
+
         String email = currentEmail();
 
         CustomerOrder order = orderRepository
@@ -422,6 +462,7 @@ public class OrderService {
 
         if ("RAZORPAY".equals(order.getPaymentMethod())
                 && "PAID".equals(order.getPaymentStatus())) {
+
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "A paid online order must be refunded before it can be cancelled. Please contact support.");
@@ -430,54 +471,22 @@ public class OrderService {
         List<CustomerOrderItem> items =
                 orderItemRepository.findByOrderId(order.getId());
 
-        List<Long> productIds = items.stream()
-                .map(item -> item.getProduct().getId())
-                .distinct()
-                .sorted()
-                .toList();
-
-        Map<Long, Product> lockedProducts = new LinkedHashMap<>();
-
-        for (Long productId : productIds) {
-            Product product = productRepository
-                    .findByIdForUpdate(productId)
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.CONFLICT,
-                            "A product associated with this order no longer exists"));
-
-            lockedProducts.put(productId, product);
-        }
-
-        for (CustomerOrderItem item : items) {
-            Long productId = item.getProduct().getId();
-            Product product = lockedProducts.get(productId);
-
-            Integer currentStock = product.getStockQuantity();
-            Integer quantity = item.getQuantity();
-
-            if (currentStock == null || quantity == null || quantity < 1) {
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "Unable to restore stock for " + item.getProductName());
-            }
-
-            try {
-                product.setStockQuantity(Math.addExact(currentStock, quantity));
-            } catch (ArithmeticException ex) {
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "Stock quantity overflow for " + item.getProductName());
-            }
-        }
+        // Restore inventory using the committed reservation.
+        // This prevents restoring warehouse and product stock twice.
+        inventoryService.releaseByReference(
+                "ORDER",
+                order.getOrderNumber());
 
         order.setOrderStatus("CANCELLED");
 
         CustomerOrder savedOrder = orderRepository.saveAndFlush(order);
+
         eventPublisher.orderCancelled(
                 savedOrder.getId(),
                 savedOrder.getOrderNumber(),
                 savedOrder.getUserEmail()
         );
+
         List<OrderItemResponse> responseItems = items.stream()
                 .map(item -> new OrderItemResponse(
                         item.getProduct().getId(),
@@ -496,29 +505,39 @@ public class OrderService {
             String razorpayOrderId,
             String razorpayPaymentId,
             String signature) {
+
         String email = currentEmail();
+
         CustomerOrder order = orderRepository
                 .findByOrderNumberAndUserEmailForUpdate(orderNumber, email)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Order not found"));
+
         if (!"RAZORPAY".equals(order.getPaymentMethod())
                 || order.getRazorpayOrderId() == null
                 || !order.getRazorpayOrderId().equals(razorpayOrderId)) {
+
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "Payment does not match this order");
         }
+
         if ("PAID".equals(order.getPaymentStatus())) {
+
             if (!razorpayPaymentId.equals(order.getRazorpayPaymentId())) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT, "Order was paid with another payment");
             }
+
             return buildOrderResponse(order);
         }
+
         if (!paymentService.isCapturedPayment(
                 razorpayOrderId, razorpayPaymentId, signature)) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Payment verification failed");
         }
+
         order.setRazorpayPaymentId(razorpayPaymentId);
         order.setPaymentStatus("PAID");
 
@@ -532,20 +551,26 @@ public class OrderService {
                 savedOrder.getTotalAmount()
         );
 
-        return buildOrderResponse(savedOrder);  }
+        return buildOrderResponse(savedOrder);
+    }
 
     @Transactional
     public void recordCapturedPayment(String razorpayOrderId, String paymentId) {
+
         CustomerOrder order = orderRepository
                 .findByRazorpayOrderIdForUpdate(razorpayOrderId)
                 .orElse(null);
+
         if (order == null) return;
+
         if ("PAID".equals(order.getPaymentStatus())) {
             if (paymentId.equals(order.getRazorpayPaymentId())) return;
+
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "A different payment is already recorded for this order");
         }
+
         order.setRazorpayPaymentId(paymentId);
         order.setPaymentStatus("PAID");
 
@@ -563,6 +588,7 @@ public class OrderService {
     // CUSTOMER: Retrieve the logged-in customer's orders.
     @Transactional(readOnly = true)
     public List<OrderResponse> getMyOrders() {
+
         String email = currentEmail();
 
         return orderRepository
@@ -574,7 +600,9 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public Page<OrderResponse> getMyOrders(Pageable pageable) {
+
         String email = currentEmail();
+
         return orderRepository
                 .findByUserEmailOrderByCreatedAtDesc(email, pageable)
                 .map(this::buildOrderResponse);
@@ -583,6 +611,7 @@ public class OrderService {
     // CUSTOMER: Retrieve one of the logged-in customer's orders.
     @Transactional(readOnly = true)
     public OrderResponse getOrder(String orderNumber) {
+
         String email = currentEmail();
 
         CustomerOrder order = orderRepository
@@ -597,6 +626,7 @@ public class OrderService {
     // ADMIN: Retrieve all orders.
     @Transactional(readOnly = true)
     public List<OrderResponse> getAllOrdersForAdmin() {
+
         return orderRepository.findAllByOrderByCreatedAtDesc()
                 .stream()
                 .map(this::buildOrderResponse)
@@ -613,17 +643,22 @@ public class OrderService {
             String query,
             String status,
             Pageable pageable) {
+
         String normalizedQuery = query == null || query.isBlank()
                 ? null : query.trim();
+
         String normalizedStatus = status == null || status.isBlank()
                 || "ALL".equalsIgnoreCase(status)
                 ? null : status.trim().toUpperCase(Locale.ROOT);
+
         if (normalizedStatus != null && !List.of(
                 "PLACED", "CONFIRMED", "SHIPPED", "OUT_FOR_DELIVERY",
                 "DELIVERED", "CANCELLED").contains(normalizedStatus)) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Invalid order status filter");
         }
+
         return orderRepository.searchAdminOrders(
                         normalizedQuery, normalizedStatus, pageable)
                 .map(this::buildOrderResponse);
@@ -632,6 +667,7 @@ public class OrderService {
     // ADMIN: Retrieve one order with its purchased items.
     @Transactional(readOnly = true)
     public OrderResponse getOrderDetailsForAdmin(String orderNumber) {
+
         CustomerOrder order = orderRepository
                 .findByOrderNumber(orderNumber)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -650,6 +686,7 @@ public class OrderService {
         if (request == null
                 || request.orderStatus() == null
                 || request.orderStatus().isBlank()) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Order status is required");
@@ -662,6 +699,7 @@ public class OrderService {
                         "Order not found"));
 
         String currentStatus = order.getOrderStatus();
+
         String newStatus = request.orderStatus()
                 .trim()
                 .toUpperCase(Locale.ROOT);
@@ -683,12 +721,14 @@ public class OrderService {
 
         if ("RAZORPAY".equals(order.getPaymentMethod())
                 && !"PAID".equals(order.getPaymentStatus())) {
+
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "An online order cannot be shipped until its payment is captured");
         }
 
         order.setOrderStatus(newStatus);
+
         CustomerOrder savedOrder = orderRepository.saveAndFlush(order);
 
         eventPublisher.orderStatusChanged(
@@ -713,6 +753,7 @@ public class OrderService {
         if (idempotencyKey == null
                 || idempotencyKey.isBlank()
                 || request == null) {
+
             return Optional.empty();
         }
 
@@ -741,6 +782,7 @@ public class OrderService {
     @Transactional(readOnly = true)
     public Optional<OrderResponse> findExistingCheckout(
             String idempotencyKey) {
+
         return Optional.empty();
     }
 

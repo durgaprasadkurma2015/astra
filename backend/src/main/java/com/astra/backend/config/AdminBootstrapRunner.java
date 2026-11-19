@@ -1,3 +1,4 @@
+
 package com.astra.backend.config;
 
 import java.util.Locale;
@@ -20,22 +21,6 @@ public class AdminBootstrapRunner {
             PasswordEncoder passwordEncoder) {
 
         return args -> {
-            String enabled = System.getenv("ASTRA_BOOTSTRAP_ADMIN_ENABLED");
-
-            // Do nothing unless explicitly enabled.
-            if (!"true".equalsIgnoreCase(enabled)) {
-                return;
-            }
-
-            boolean adminExists = userRepository.findAll()
-                    .stream()
-                    .anyMatch(user -> user.getRole() == Role.ADMIN);
-
-            if (adminExists) {
-                System.out.println(
-                        "ASTRA bootstrap skipped: an ADMIN already exists.");
-                return;
-            }
 
             String email = System.getenv("ASTRA_BOOTSTRAP_ADMIN_EMAIL");
             String password = System.getenv("ASTRA_BOOTSTRAP_ADMIN_PASSWORD");
@@ -44,16 +29,24 @@ public class AdminBootstrapRunner {
                     || password == null || password.length() < 8
                     || password.length() > 72) {
                 throw new IllegalStateException(
-                        "Set a valid bootstrap admin email and password "
-                        + "through environment variables.");
+                        "Set valid ASTRA admin credentials in environment variables.");
             }
 
             email = email.trim().toLowerCase(Locale.ROOT);
 
+            boolean adminExists = userRepository.findAll()
+                    .stream()
+                    .anyMatch(user -> user.getRole() == Role.ADMIN);
+
+            if (adminExists) {
+                System.out.println(
+                        "ASTRA: Admin already exists. Skipping creation.");
+                return;
+            }
+
             if (userRepository.existsByEmail(email)) {
                 throw new IllegalStateException(
-                        "Bootstrap email already belongs to an existing user. "
-                        + "Use a different email.");
+                        "Bootstrap email already belongs to another user.");
             }
 
             AppUser admin = new AppUser();
@@ -61,13 +54,12 @@ public class AdminBootstrapRunner {
             admin.setEmail(email);
             admin.setPasswordHash(passwordEncoder.encode(password));
             admin.setRole(Role.ADMIN);
-//            admin.setActive(true);
             admin.setEmailVerified(true);
 
             userRepository.saveAndFlush(admin);
 
-            System.out.println(
-                    "ASTRA bootstrap admin created successfully.");
+            System.out.println("ASTRA: First Admin created successfully.");
+            System.out.println("Admin Email: " + email);
         };
     }
 }
