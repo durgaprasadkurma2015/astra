@@ -10,12 +10,28 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @Configuration
 public class KafkaConfig {
+	
+	@Bean
+	public DefaultErrorHandler kafkaErrorHandler(
+	        KafkaTemplate<String, String> kafkaTemplate) {
+
+	    DeadLetterPublishingRecoverer recoverer =
+	            new DeadLetterPublishingRecoverer(kafkaTemplate);
+
+	    return new DefaultErrorHandler(
+	            recoverer,
+	            new FixedBackOff(1000L, 3L)
+	    );
+	}
 
     @Bean
     public ProducerFactory<String, String> producerFactory(

@@ -1,3 +1,4 @@
+
 package com.astra.customer.service;
 
 import com.astra.customer.dto.CustomerRequest;
@@ -18,13 +19,22 @@ public class CustomerManagementService {
 
     private final CustomerRepository repository;
 
-    public CustomerManagementService(
-            CustomerRepository repository) {
+    public CustomerManagementService(CustomerRepository repository) {
         this.repository = repository;
     }
 
+    // CUSTOMER creates their own profile using JWT userId
     @Transactional
-    public CustomerResponse create(CustomerRequest request) {
+    public CustomerResponse create(
+            CustomerRequest request,
+            Long authenticatedUserId) {
+
+        if (authenticatedUserId == null) {
+            throw new ResponseStatusException(
+                HttpStatus.UNAUTHORIZED,
+                "Authenticated user ID is missing"
+            );
+        }
 
         String email = normalizeEmail(request.email());
 
@@ -35,40 +45,63 @@ public class CustomerManagementService {
             );
         }
 
-        if (request.authUserId() != null
-                && repository.existsByAuthUserId(request.authUserId())) {
+        if (repository.existsByAuthUserId(authenticatedUserId)) {
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "Customer is already linked to an auth user"
+                "Customer profile already exists for this user"
             );
         }
 
         Customer customer = new Customer();
+
+        customer.setAuthUserId(authenticatedUserId);
+
         applyRequest(customer, request);
         customer.setEmail(email);
 
         return toResponse(repository.save(customer));
     }
 
+    // ADMIN only
     @Transactional(readOnly = true)
-    public List<CustomerResponse> getAll() {
-        return repository.findAll()
+    public List<CustomerResponse> getAll(boolean isAdmin) {
+
+        requireAdmin(isAdmin);
+
+        return repository.findAllByOrderByCreatedAtDesc()
             .stream()
             .map(this::toResponse)
             .toList();
     }
 
+    // ADMIN can access any customer.
+    // CUSTOMER can access only their own customer record.
     @Transactional(readOnly = true)
-    public CustomerResponse getById(Long id) {
-        return toResponse(findCustomer(id));
+    public CustomerResponse getById(
+            Long id,
+            Long authenticatedUserId,
+            boolean isAdmin) {
+
+        Customer customer = isAdmin
+            ? findCustomer(id)
+            : findCustomerByOwner(id, authenticatedUserId);
+
+        return toResponse(customer);
     }
 
+    // ADMIN can update any customer.
+    // CUSTOMER can update only their own customer record.
     @Transactional
     public CustomerResponse update(
             Long id,
-            CustomerRequest request) {
+            CustomerRequest request,
+            Long authenticatedUserId,
+            boolean isAdmin) {
 
-        Customer customer = findCustomer(id);
+        Customer customer = isAdmin
+            ? findCustomer(id)
+            : findCustomerByOwner(id, authenticatedUserId);
+
         String email = normalizeEmail(request.email());
 
         if (repository.existsByEmailAndIdNot(email, id)) {
@@ -78,32 +111,59 @@ public class CustomerManagementService {
             );
         }
 
-        if (request.authUserId() != null
-                && repository.existsByAuthUserIdAndIdNot(
-                    request.authUserId(), id)) {
-            throw new ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Auth user is already linked to another customer"
-            );
-        }
-
+        // Do not change authUserId during an update.
         applyRequest(customer, request);
         customer.setEmail(email);
 
         return toResponse(repository.save(customer));
     }
 
+    // ADMIN only
     @Transactional
-    public void delete(Long id) {
+    public void delete(Long id, boolean isAdmin) {
+
+        requireAdmin(isAdmin);
+
         Customer customer = findCustomer(id);
         repository.delete(customer);
+    }
+
+    private void requireAdmin(boolean isAdmin) {
+        if (!isAdmin) {
+            throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "Admin access required"
+            );
+        }
     }
 
     private Customer findCustomer(Long id) {
         return repository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "Customer not found: " + id
+                "Customer not found"
+            ));
+    }
+
+    private Customer findCustomerByOwner(
+            Long id,
+            Long authenticatedUserId) {
+
+        if (authenticatedUserId == null) {
+            throw new ResponseStatusException(
+                HttpStatus.UNAUTHORIZED,
+                "Authenticated user ID is missing"
+            );
+        }
+
+        // Return 404 for both nonexistent and other users' records.
+        return repository.findByIdAndAuthUserId(
+                id,
+                authenticatedUserId
+            )
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Customer not found"
             ));
     }
 
@@ -111,7 +171,6 @@ public class CustomerManagementService {
             Customer customer,
             CustomerRequest request) {
 
-        customer.setAuthUserId(request.authUserId());
         customer.setFullName(request.fullName().trim());
         customer.setDateOfBirth(request.dateOfBirth());
         customer.setGender(blankToNull(request.gender()));

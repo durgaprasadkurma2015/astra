@@ -1,11 +1,10 @@
+
 package com.astra.customer.dto;
 
 import jakarta.validation.constraints.*;
 import java.time.LocalDate;
 
 public record CustomerRequest(
-
-    Long authUserId,
 
     @NotBlank
     @Size(max = 100)

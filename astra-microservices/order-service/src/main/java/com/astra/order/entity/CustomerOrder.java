@@ -72,6 +72,17 @@ public class CustomerOrder {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private LocalDateTime updatedAt;
+    
+    @Column(name = "stock_status", nullable = false, length = 30)
+    private String stockStatus = "PENDING";
+    
+    public String getStockStatus() {
+        return stockStatus;
+    }
+
+    public void setStockStatus(String value) {
+        stockStatus = value;
+    }
 
     public Long getId() { return id; }
     public String getOrderNumber() { return orderNumber; }

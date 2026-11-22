@@ -38,6 +38,16 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/actuator/health"
                         ).permitAll()
+
+                        // Public Swagger / OpenAPI endpoints
+                           .requestMatchers(
+                               "/v3/api-docs/**",
+                               "/v3/api-docs.yaml",
+                               "/swagger-ui.html",
+                               "/swagger-ui/**",
+                               "/webjars/**"
+                           ).permitAll()
+                           
                         .requestMatchers("/api/v1/admin/orders/**")
                         .hasRole("ADMIN")
                         .requestMatchers("/api/v1/orders/**")

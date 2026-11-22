@@ -28,6 +28,8 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
 import org.springframework.security.web.server.authorization.ServerAccessDeniedHandler;
 
+import com.astra.gateway.security.RevocationCheckingJwtDecoder;
+
 import reactor.core.publisher.Mono;
 
 @Configuration
@@ -37,31 +39,44 @@ public class SecurityConfig {
     @Value("${app.jwt.secret}")
     private String jwtSecret;
 
-    @Bean
-    public ReactiveJwtDecoder jwtDecoder() {
 
-        byte[] keyBytes = Base64.getDecoder().decode(jwtSecret);
+@Bean
+public ReactiveJwtDecoder jwtDecoder(
+        @Value("${app.auth.base-url:http://localhost:8081}")
+        String authBaseUrl,
 
-        if (keyBytes.length < 32) {
-            throw new IllegalStateException(
-                "JWT secret must contain at least 32 bytes"
-            );
-        }
+        @Value("${app.internal-api-key}")
+        String internalApiKey) {
 
-        SecretKey secretKey = new SecretKeySpec(
-            keyBytes,
-            "HmacSHA256"
+    byte[] keyBytes = Base64.getDecoder().decode(jwtSecret);
+
+    if (keyBytes.length < 32) {
+        throw new IllegalStateException(
+            "JWT secret must contain at least 32 bytes"
         );
-
-        NimbusReactiveJwtDecoder decoder =
-            NimbusReactiveJwtDecoder.withSecretKey(secretKey)
-                .macAlgorithm(MacAlgorithm.HS256)
-                .build();
-
-        decoder.setJwtValidator(JwtValidators.createDefault());
-
-        return decoder;
     }
+
+    SecretKey secretKey = new SecretKeySpec(
+        keyBytes,
+        "HmacSHA256"
+    );
+
+    NimbusReactiveJwtDecoder decoder =
+        NimbusReactiveJwtDecoder.withSecretKey(secretKey)
+            .macAlgorithm(MacAlgorithm.HS256)
+            .build();
+
+    decoder.setJwtValidator(JwtValidators.createDefault());
+
+    return new RevocationCheckingJwtDecoder(
+        decoder,
+        org.springframework.web.reactive.function.client.WebClient
+            .builder()
+            .baseUrl(authBaseUrl)
+            .build(),
+        internalApiKey
+    );
+}
 
     @Bean
     public Converter<Jwt, Mono<AbstractAuthenticationToken>>
@@ -118,6 +133,27 @@ public class SecurityConfig {
                     "/actuator/health"
                 ).permitAll()
 
+             
+                
+             // Public Swagger documentation endpoints
+                .pathMatchers(
+                    "/swagger-ui.html",
+                    "/swagger-ui/**",
+                    "/v3/api-docs/**",
+                    "/v3/api-docs.yaml",
+                    "/auth/v3/api-docs",
+                    "/customer/v3/api-docs",
+                    "/product/v3/api-docs",
+                    "/inventory/v3/api-docs",
+                    "/cart/v3/api-docs",
+                    "/wishlist/v3/api-docs",
+                    "/order/v3/api-docs",
+                    "/promotion/v3/api-docs",
+                    "/notification/v3/api-docs",
+                    "/review/v3/api-docs",
+                    "/payment/v3/api-docs"
+                ).permitAll()
+                
                 // Admin-only endpoints
                 .pathMatchers("/api/v1/admin/**")
                     .hasRole("ADMIN")

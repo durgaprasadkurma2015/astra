@@ -72,14 +72,32 @@ public class SecurityConfig {
                     "/api/v1/auth/register",
                     "/api/v1/auth/verify-registration-otp",
                     "/api/v1/auth/resend-registration-otp",
+                    "/api/v1/auth/forgot-password",
+                    "/api/v1/auth/reset-password",
                     "/api/v1/auth/login"
                 ).permitAll()
-
+             // Internal Gateway-to-Auth communication.
+             // Controller independently validates the internal API key.
+             .requestMatchers(
+                 HttpMethod.GET,
+                 "/internal/auth/tokens/*/revocation-status"
+             ).permitAll()
                 .requestMatchers(
                     HttpMethod.GET,
                     "/actuator/health",
                     "/api/v1/auth/test"
                 ).permitAll()
+
+             // Public Swagger / OpenAPI endpoints
+                .requestMatchers(
+                    "/v3/api-docs/**",
+                    "/v3/api-docs.yaml",
+                    "/swagger-ui.html",
+                    "/swagger-ui/**",
+                    "/webjars/**"
+                ).permitAll()
+
+
 
                 // Admin-only APIs
                 .requestMatchers("/api/v1/admin/**")
