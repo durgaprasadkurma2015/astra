@@ -90,4 +90,17 @@ public class CustomerController {
 
         return ResponseEntity.noContent().build();
     }
+    
+ // CUSTOMER: Get logged-in customer's own profile
+    @GetMapping("/me")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<CustomerResponse> getMyProfile(
+            @AuthenticationPrincipal Jwt jwt) {
+
+        Long authUserId = jwt.getClaim("userId");
+
+        return ResponseEntity.ok(
+            service.getByAuthUserId(authUserId)
+        );
+    }
 }

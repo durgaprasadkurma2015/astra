@@ -88,6 +88,27 @@ public class CustomerManagementService {
 
         return toResponse(customer);
     }
+    
+ // CUSTOMER: Get logged-in customer's own profile
+    @Transactional(readOnly = true)
+    public CustomerResponse getByAuthUserId(Long authUserId) {
+
+        if (authUserId == null) {
+            throw new ResponseStatusException(
+                HttpStatus.UNAUTHORIZED,
+                "Authenticated user ID is missing"
+            );
+        }
+
+        Customer customer = repository.findByAuthUserId(authUserId)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Customer profile not found"
+            ));
+
+        return toResponse(customer);
+    }
+    
 
     // ADMIN can update any customer.
     // CUSTOMER can update only their own customer record.
@@ -224,4 +245,6 @@ public class CustomerManagementService {
             c.getUpdatedAt()
         );
     }
+    
+    
 }
